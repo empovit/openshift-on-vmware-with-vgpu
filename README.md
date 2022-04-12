@@ -15,3 +15,9 @@
 4. Install and configure the vGPU host driver for ESXi using a vSphere Installation Bundle (VIB).
 5. Install an SNO cluster on a vSphere virtual machine.
 6. Deploy the GPU operator on the SNO cluster. The cluster must have access to a vGPU.
+
+## Installing VMware vSphere 7.0 on Equinix Metal
+
+The Equinix Metal server plan that has a vGPU-compatible GPU is [g2.large.x86](https://metal.equinix.com/developers/docs/servers/server-specs/#g2largex86), but ESXi 7.0 isn't offered for it. The solution is to provision a machine with ESXi 6.5 and then upgrade to ESXi 7.0.
+
+Based on https://github.com/enkelprifti98/packet-esxi-6-7 and https://github.com/equinix/terraform-metal-vsphere.
