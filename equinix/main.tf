@@ -1,7 +1,9 @@
+# Equinix Metal API token
 provider "metal" {
   auth_token = var.auth_token
 }
 
+# Generate the de-duplication part of an SSH key name
 resource "random_string" "ssh_unique" {
   length  = 5
   special = false
@@ -10,49 +12,67 @@ resource "random_string" "ssh_unique" {
 
 locals {
   ssh_user               = "root"
-  project_name_sanitized = replace(var.project_name, "/[ ]/", "_")
 
+  # Generate a unique SSH key name out of the project name and a random string
+  project_name_sanitized = replace(var.project_name, "/[ ]/", "_")
   ssh_key_name = format("%s-%s-key", local.project_name_sanitized, random_string.ssh_unique.result)
 
+  # List the specified GCS key file in current working directory or empty filename
   gcs_keys_cwd = flatten([[fileset(path.cwd, var.gcs_key_name)], ""])
+
+  # Find the first GCS key path that's not empty, i.e. was either explicitly specified or found.
+  # If no files were found, take the module's path. Note that the relative path is deprecated.
   gcs_key_path = coalesce(abspath(var.path_to_gcs_key), path.module, var.relative_path_to_gcs_key, local.gcs_keys_cwd[0])
+
+  # Reference:
+  # https://www.terraform.io/language/functions/flatten
+  # https://www.terraform.io/language/functions/fileset
+  # https://www.terraform.io/language/expressions/references#path-cwd
+  # https://www.terraform.io/language/functions/coalesce
 }
 
+# Create a metal project or use an existing one
 resource "metal_project" "new_project" {
   count           = var.create_project ? 1 : 0
   name            = var.project_name
   organization_id = var.organization_id
 }
 
+# Remember the ID of a newely created project (if requested), or take the ID given by the user
 locals {
   depends_on = [metal_project.new_project]
   count      = var.create_project ? 1 : 0
   project_id = var.create_project ? metal_project.new_project[0].id : var.project_id
 }
 
+# Generate a secure private key
+# https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/private_key
 resource "tls_private_key" "ssh_key_pair" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
+# TODO: Allow re-using an existing key pair instead of generating a new one every time
+
+# Manage the unique user SSH key that will be injected in the project's machines.
+# Must explicitely depend on the project
+# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/ssh_key
 resource "metal_ssh_key" "ssh_pub_key" {
   depends_on = [metal_project.new_project]
   name       = local.ssh_key_name
   public_key = chomp(tls_private_key.ssh_key_pair.public_key_openssh)
 }
 
+# Save the private SSH key to a local file
 resource "local_file" "project_private_key_pem" {
   content         = chomp(tls_private_key.ssh_key_pair.private_key_pem)
   filename        = pathexpand("~/.ssh/${local.ssh_key_name}")
   file_permission = "0600"
 
+  # Back up the private SSH key associated with the project. Why?
   provisioner "local-exec" {
     command = "cp ~/.ssh/${local.ssh_key_name} ~/.ssh/${local.ssh_key_name}.bak"
   }
-}
-
-data "metal_facility" "facility" {
-  code = metal_device.router.deployed_facility
 }
 
 resource "metal_reserved_ip_block" "ip_blocks" {
@@ -97,6 +117,12 @@ resource "metal_device" "router" {
   billing_cycle           = var.billing_cycle
   project_id              = local.project_id
   hardware_reservation_id = lookup(var.reservations, var.router_hostname, "")
+}
+
+# Equinix Metal facility datastore. Needed if the user specifies a metro, but not a particular facility
+# https://registry.terraform.io/providers/equinix/metal/latest/docs/data-sources/facility
+data "metal_facility" "facility" {
+  code = metal_device.router.deployed_facility
 }
 
 locals {
@@ -160,7 +186,6 @@ resource "metal_port" "esxi_hosts" {
     ignore_changes = [vlan_ids]
   }
 }
-
 
 resource "null_resource" "run_pre_reqs" {
   connection {
@@ -333,7 +358,6 @@ resource "random_password" "sso_password" {
   override_special = "$!?@*"
   special          = true
 }
-
 
 resource "null_resource" "copy_vcva_template" {
   depends_on = [
