@@ -75,6 +75,8 @@ resource "local_file" "project_private_key_pem" {
   }
 }
 
+# Reserve blocks of public IPs, a block per user-requested subned
+# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/reserved_ip_block
 resource "metal_reserved_ip_block" "ip_blocks" {
   count      = length(var.public_subnets)
   project_id = local.project_id
@@ -83,6 +85,7 @@ resource "metal_reserved_ip_block" "ip_blocks" {
   quantity   = element(var.public_subnets.*.ip_count, count.index)
 }
 
+# Reserve blocks of 8 IP addresses per ESXi host (for VMs?)
 resource "metal_reserved_ip_block" "esx_ip_blocks" {
   count      = var.esxi_host_count
   project_id = local.project_id
@@ -91,6 +94,8 @@ resource "metal_reserved_ip_block" "esx_ip_blocks" {
   quantity   = 8
 }
 
+# Create private VLANs, by default these are: a private VM network (management), vMotion, and vSAN
+# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/vlan
 resource "metal_vlan" "private_vlans" {
   count       = length(var.private_subnets)
   facility    = var.facility == "" ? null : var.facility
@@ -99,6 +104,7 @@ resource "metal_vlan" "private_vlans" {
   description = jsonencode(element(var.private_subnets.*.name, count.index))
 }
 
+# Create public VLANs, by default this is a public VM network
 resource "metal_vlan" "public_vlans" {
   count       = length(var.public_subnets)
   facility    = var.facility == "" ? null : var.facility
@@ -107,6 +113,7 @@ resource "metal_vlan" "public_vlans" {
   description = jsonencode(element(var.public_subnets.*.name, count.index))
 }
 
+# Create a router(?), by default it's an "c3.small.x86" Ubuntu machine.
 resource "metal_device" "router" {
   depends_on              = [metal_ssh_key.ssh_pub_key]
   hostname                = var.router_hostname
@@ -119,29 +126,38 @@ resource "metal_device" "router" {
   hardware_reservation_id = lookup(var.reservations, var.router_hostname, "")
 }
 
-# Equinix Metal facility datastore. Needed if the user specifies a metro, but not a particular facility
+# Equinix Metal facility datastore. Find out the facility the router is deployed in,
+# when the user specified only a metro, but not a particular facility
 # https://registry.terraform.io/providers/equinix/metal/latest/docs/data-sources/facility
 data "metal_facility" "facility" {
   code = metal_device.router.deployed_facility
 }
 
+# Find out if the facility is an IBX (International Business Exchange™) one
 locals {
   hybrid_bonded_router = contains(data.metal_facility.facility.features, "ibx") ? true : false
 }
 
+# A network port on the router. In an IBX facility, that will be a bonded interface
+# https://metal.equinix.com/developers/docs/layer2-networking/overview/
+# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/port
 resource "metal_port" "router" {
   bonded   = local.hybrid_bonded_router
   port_id  = [for p in metal_device.router.ports : p.id if p.name == (local.hybrid_bonded_router ? "bond0" : "eth1")][0]
   vlan_ids = concat(metal_vlan.private_vlans.*.id, metal_vlan.public_vlans.*.id)
 
-  # vlans can't delete when ports are connected to them.
-  # if the device is deleted without disconnecting first,
-  # we won't be able to detach ports properly and the vlan
+  # A VLAN can't be deleted when there are ports connected to it.
+  # If the device is deleted without first disconnecting it from VLANs,
+  # we won't be able to detach ports properly and the VLAN
   # delete will fail until the device instance is completely
-  # deleted.
+  # deleted. This option will reset the port to its default setting, meaning 
+  # a bond port will be converted to Layer3 without VLANs attached, and eth ports 
+  # will be bonded without a native VLAN and VLANs attached
   reset_on_delete = true
 }
 
+# Assign the ESXi subnet to the router device
+# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/ip_attachment
 resource "metal_ip_attachment" "block_assignment" {
   depends_on    = [metal_port.router]
   count         = length(metal_reserved_ip_block.ip_blocks)
@@ -149,6 +165,7 @@ resource "metal_ip_attachment" "block_assignment" {
   cidr_notation = element(metal_reserved_ip_block.ip_blocks.*.cidr_notation, count.index)
 }
 
+# Create ESXi hosts
 resource "metal_device" "esxi_hosts" {
   depends_on              = [metal_ssh_key.ssh_pub_key]
   count                   = var.esxi_host_count

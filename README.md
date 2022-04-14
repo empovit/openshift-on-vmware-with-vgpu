@@ -20,4 +20,4 @@
 
 The Equinix Metal server plan that has a vGPU-compatible GPU is [g2.large.x86](https://metal.equinix.com/developers/docs/servers/server-specs/#g2largex86), but ESXi 7.0 isn't offered for it. The solution is to provision a machine with ESXi 6.5 and then upgrade to ESXi 7.0.
 
-Based on https://github.com/enkelprifti98/packet-esxi-6-7 and https://github.com/equinix/terraform-metal-vsphere.
+Based on https://github.com/enkelprifti98/packet-esxi-6-7 and https://github.com/equinix/terraform-metal-vsphere, explained in detail in [Using VMware ESXi on Equinix Metal](https://metal.equinix.com/developers/guides/vmware-esxi/) and [Setting up Multi-node vSphere Cluster with VSan Support on Equinix Metal](https://metal.equinix.com/developers/guides/vmware/), respectively.
