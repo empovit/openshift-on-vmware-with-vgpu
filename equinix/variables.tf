@@ -274,3 +274,30 @@ variable "reservations" {
   type        = map(any)
   default     = {}
 }
+
+variable "vcva_deployment_option" {
+  description = <<-EOF
+  Size of the vCenter appliance: tiny, tiny-lstorage, ..., small, etc.
+  See https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vcenter.install.doc/GUID-457EAE1F-B08A-4E64-8506-8A3FA84A0446.html  
+  for full list of options
+  EOF
+  type        = string
+  default     = "small"
+}
+
+variable "update_esxi" {
+  description = "if true update the ESXi version before proceeding to vCenter installation"
+  type        = bool
+  default     = false
+
+}
+
+variable "esxi_update_filename" {
+  description = <<-EOF
+  The specific update version that your servers will be updated to.
+  Note that the Equinix Metal portal and API will still show ESXi 6.5 as the OS but this script adds a tag with the update filename specified below.
+  You can check all ESXi update versions/filenames here: https://esxi-patches.v-front.de/
+  EOF
+  type        = string
+  default     = "ESXi-7.0U3d-19482537-standard"
+}

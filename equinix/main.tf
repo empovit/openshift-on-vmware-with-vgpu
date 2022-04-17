@@ -138,7 +138,7 @@ locals {
   hybrid_bonded_router = contains(data.metal_facility.facility.features, "ibx") ? true : false
 }
 
-# A network port on the router. In an IBX facility, that will be a bonded interface
+# A network port on the router. In an IBX facility, that will be the bonded interface, otherwise eth1
 # https://metal.equinix.com/developers/docs/layer2-networking/overview/
 # https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/port
 resource "metal_port" "router" {
@@ -177,24 +177,91 @@ resource "metal_device" "esxi_hosts" {
   billing_cycle           = var.billing_cycle
   project_id              = local.project_id
   hardware_reservation_id = lookup(var.reservations, format("%s%02d", var.esxi_hostname, count.index + 1), "")
+
+  # Assign a public IPv4 address from the reserved block
   ip_address {
     type            = "public_ipv4"
     cidr            = 29
     reservation_ids = [element(metal_reserved_ip_block.esx_ip_blocks.*.id, count.index)]
   }
+
+  # Assing a private IPv4 address
   ip_address {
     type = "private_ipv4"
   }
+
+  # Assign a public IPv6 address
   ip_address {
     type = "public_ipv6"
   }
 }
 
+# Wait for the post provision reboot process to complete before updating ESXi
+resource "null_resource" "reboot_pre_upgrade" {
+
+  depends_on = [metal_device.esxi_hosts]
+  count      = var.update_esxi ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "sleep 250"
+  }
+}
+
+# Generate an ESXi version update script file
+data "template_file" "upgrade_script" {
+  count    = var.update_esxi ? length(metal_device.esxi_hosts) : 0
+  template = "${file("${path.module}/templates/update_esxi.sh.tpl")}"
+  vars = {
+    esxi_update_filename = "${var.esxi_update_filename}"
+  }
+}
+
+# Run the ESXi update script file in each server.
+# If you make changes to the shell script, you need to update the sed command line number to get rid of te { at the end of the file which gets created by Terraform for some reason.
+resource "null_resource" "upgrade_nodes" {
+
+  depends_on  = [null_resource.reboot_pre_upgrade]
+  count       = var.update_esxi ? length(metal_device.esxi_hosts) : 0
+
+  connection {
+    user        = local.ssh_user
+    private_key = chomp(tls_private_key.ssh_key_pair.private_key_pem)
+    host        = "${element(metal_device.esxi_hosts.*.access_public_ipv4, count.index)}"
+  }
+
+  provisioner "file" {
+    content     = "${element(data.template_file.upgrade_script.*.rendered, count.index)}}"
+    destination = "/tmp/update_esxi.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sed -i '27d' /tmp/update_esxi.sh",
+      "echo 'Running update script on remote host.'",
+      "chmod +x /tmp/update_esxi.sh",
+      "/tmp/update_esxi.sh"
+    ]
+  }
+}
+
+# Wait for the post provision reboot process to complete before updating ESXi
+resource "null_resource" "reboot_post_upgrade" {
+
+  depends_on = [null_resource.upgrade_nodes]
+  count      = var.update_esxi ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "sleep 250"
+  }
+}
+
+# Network ports on the ESXi hosts. The eth1 will be taken out of the bond0, and connected to the VLANs - private & public
 resource "metal_port" "esxi_hosts" {
-  count    = length(metal_device.esxi_hosts)
-  bonded   = false
-  port_id  = [for p in metal_device.esxi_hosts[count.index].ports : p.id if p.name == "eth1"][0]
-  vlan_ids = concat(metal_vlan.private_vlans.*.id, metal_vlan.public_vlans.*.id)
+  depends_on  = [null_resource.reboot_post_upgrade]
+  count       = length(metal_device.esxi_hosts)
+  bonded      = false
+  port_id     = [for p in metal_device.esxi_hosts[count.index].ports : p.id if p.name == "eth1"][0]
+  vlan_ids    = concat(metal_vlan.private_vlans.*.id, metal_vlan.public_vlans.*.id)
 
   reset_on_delete = true
 
@@ -204,6 +271,11 @@ resource "metal_port" "esxi_hosts" {
   }
 }
 
+# SSH to the router's public IPv4 address and create remote files, populating them with user-assigned and TF-generated values
+# * $HOME/bootstrap/vars.py
+# * $HOME/bootstrap/pre_reqs.py
+# Then, remotely execute `$HOME/bootstrap/pre_reqs.py`
+# https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource
 resource "null_resource" "run_pre_reqs" {
   connection {
     type        = "ssh"
@@ -249,6 +321,7 @@ resource "null_resource" "run_pre_reqs" {
   }
 }
 
+# Populate locally the script for downloading a vCenter ISO via either AWS S3 or GCS protocol
 data "template_file" "download_vcenter" {
   template = file("${path.module}/templates/download_vcenter.sh")
   vars = {
@@ -263,6 +336,7 @@ data "template_file" "download_vcenter" {
   }
 }
 
+# Copy the local GCS keys (if using GCS) over to the router
 resource "null_resource" "copy_gcs_key" {
   count      = var.object_store_tool == "gcs" ? 1 : 0
   depends_on = [null_resource.run_pre_reqs]
@@ -278,6 +352,7 @@ resource "null_resource" "copy_gcs_key" {
   }
 }
 
+# Copy the rendered script for downloading vCenter and run it
 resource "null_resource" "download_vcenter_iso" {
   depends_on = [
     null_resource.run_pre_reqs,
@@ -288,11 +363,6 @@ resource "null_resource" "download_vcenter_iso" {
     user        = local.ssh_user
     private_key = chomp(tls_private_key.ssh_key_pair.private_key_pem)
     host        = metal_device.router.access_public_ipv4
-  }
-
-  provisioner "file" {
-    content     = data.template_file.download_vcenter.rendered
-    destination = "$HOME/bootstrap/download_vcenter.sh"
   }
 
   provisioner "file" {
@@ -325,6 +395,7 @@ resource "random_password" "vpn_pass" {
   special          = true
 }
 
+
 data "template_file" "vpn_installer" {
   template = file("${path.module}/templates/l2tp_vpn.sh")
   vars = {
@@ -334,6 +405,7 @@ data "template_file" "vpn_installer" {
   }
 }
 
+# Set up an IPsec VPN server on the router
 resource "null_resource" "install_vpn_server" {
   depends_on = [
     null_resource.run_pre_reqs,
@@ -376,6 +448,7 @@ resource "random_password" "sso_password" {
   special          = true
 }
 
+# Populate the deployment configuration of the vCenter Virtual Appliance (vcva) and copy it to the router
 resource "null_resource" "copy_vcva_template" {
   depends_on = [
     null_resource.run_pre_reqs,
@@ -389,18 +462,20 @@ resource "null_resource" "copy_vcva_template" {
 
   provisioner "file" {
     content = templatefile("${path.module}/templates/vcva_template.json", {
-      vcenter_password = random_password.vcenter_password.result,
-      sso_password     = random_password.sso_password.result,
-      first_esx_pass   = metal_device.esxi_hosts.0.root_password,
-      domain_name      = var.domain_name,
-      vcenter_network  = var.vcenter_portgroup_name,
-      vcenter_domain   = var.vcenter_domain,
+      vcenter_password        = random_password.vcenter_password.result,
+      sso_password            = random_password.sso_password.result,
+      first_esx_pass          = metal_device.esxi_hosts.0.root_password,
+      domain_name             = var.domain_name,
+      vcenter_network         = var.vcenter_portgroup_name,
+      vcenter_domain          = var.vcenter_domain,
+      vcva_deployment_option  = var.vcva_deployment_option
     })
 
     destination = "$HOME/bootstrap/vcva_template.json"
   }
 }
 
+# Copy the Python script for updating uplinks on the ESXi hosts to the router
 resource "null_resource" "copy_update_uplinks" {
   depends_on = [null_resource.run_pre_reqs]
   connection {
@@ -416,6 +491,7 @@ resource "null_resource" "copy_update_uplinks" {
   }
 }
 
+# Copy the Python script for updating ESXi host networking to the router
 resource "null_resource" "esx_network_prereqs" {
   depends_on = [null_resource.run_pre_reqs]
   connection {
@@ -431,10 +507,12 @@ resource "null_resource" "esx_network_prereqs" {
   }
 }
 
+# Update the networking of each ESXi host by running the Python scrips on the router
+# https://metal.equinix.com/developers/guides/vmware-esxi/#quirks-of-standard-vswitch
 resource "null_resource" "apply_esx_network_config" {
   count = length(metal_device.esxi_hosts)
   depends_on = [
-    metal_port.esxi_hosts,
+    null_resource.reboot_post_upgrade,
     null_resource.esx_network_prereqs,
     null_resource.copy_update_uplinks,
     null_resource.install_vpn_server
@@ -452,6 +530,7 @@ resource "null_resource" "apply_esx_network_config" {
   }
 }
 
+# Deploy vCenter Virtual Apliance (VCVA)
 resource "null_resource" "deploy_vcva" {
   depends_on = [
     null_resource.apply_esx_network_config,
@@ -464,6 +543,8 @@ resource "null_resource" "deploy_vcva" {
     host        = metal_device.router.access_public_ipv4
   }
 
+  # If there's only one ESXi server (without vSAN), the default datastore might not be enought in install vCenter. 
+  # This script extends the datastore to span all the available disks of an ESXi host.
   provisioner "file" {
     source      = "${path.module}/templates/extend_datastore.sh"
     destination = "$HOME/bootstrap/extend_datastore.sh"
@@ -484,6 +565,7 @@ resource "null_resource" "deploy_vcva" {
   }
 }
 
+# Set up vSAN if there are more than one ESXi host
 resource "null_resource" "vsan_claim" {
   depends_on = [null_resource.deploy_vcva]
   count      = var.esxi_host_count == 1 ? 0 : 1

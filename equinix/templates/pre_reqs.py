@@ -14,6 +14,7 @@ from vars import (
 )
 
 
+# Select only 4- and 5-letter words
 def words_list():
     word_site = "https://raw.githubusercontent.com/taikuukaits/SimpleWordlists/master/Wordlist-Nouns-Common-Audited-Len-3-6.txt"
     response = urllib2.urlopen(word_site)
@@ -28,10 +29,12 @@ def words_list():
 # Get random word list
 words = words_list()
 
-# Allow
+# Persist iptables IPv4 rules
 os.system(
     "echo 'iptables-persistent iptables-persistent/autosave_v4 boolean true' | sudo debconf-set-selections"
 )
+
+# Persist iptables IPv6 rules
 os.system(
     "echo 'iptables-persistent iptables-persistent/autosave_v6 boolean true' | sudo debconf-set-selections"
 )
@@ -55,17 +58,19 @@ for i in range(0, len(private_vlans)):
     subnets[i]["vlan"] = private_vlans[i]
 
 for i in range(0, len(public_vlans)):
+    # Update the public subnets with their VLANs and CIDRs
     public_subnets[i]["vlan"] = public_vlans[i]
     public_subnets[i]["cidr"] = public_cidrs[i]
     subnets.append(public_subnets[i])
 
 # Wipe second Network Interface from config file
+# TODO: This doesn't seem to do anything useful, because the lines will be later written back to the file
 readFile = open("/etc/network/interfaces")
 lines = readFile.readlines()
 readFile.close()
 interface = "bond0"
 
-# Ensure 8021q is loaded
+# Ensure 8021q is loaded (working with VLAN tagging on the host)
 os.system("modprobe 8021q")
 
 # Make sure 8021q is loaded at startup
@@ -73,7 +78,7 @@ modules_file = open("/etc/modules-load.d/modules.conf", "a+")
 modules_file.write("\n8021q\n")
 modules_file.close()
 
-# Setup syctl parameters for routing
+# Setup sysctl parameters for routing
 sysctl_file = open("/etc/sysctl.conf", "a+")
 sysctl_file.write("\n\n#Routing parameters\n")
 sysctl_file.write("net.ipv4.conf.all.rp_filter=0\n")
@@ -87,6 +92,7 @@ os.system("sysctl -p")
 
 # Remove old conf for second interface
 interface_file = open("/etc/network/interfaces", "w")
+# TODO: This seems to dump the original lines back to the file
 for line in lines:
     interface_file.write(line)
 
@@ -118,7 +124,8 @@ for subnet in subnets:
             high_ip = list(ipaddress.ip_network(subnet["cidr"]).hosts())[-1].compressed
         netmask = ipaddress.ip_network(subnet["cidr"]).netmask.compressed
 
-        # Setup vLan interface for this subnet
+        # Setup VLAN interface for this subnet
+        # See https://metal.equinix.com/developers/docs/layer2-networking/overview/
         interface_file.write("\nauto {}.{}\n".format(interface, subnet["vlan"]))
         interface_file.write(
             "iface {}.{} inet static\n".format(interface, subnet["vlan"])
@@ -165,7 +172,7 @@ resolv_conf = open("/etc/resolv.conf", "a+")
 resolv_conf.write("\ndomain {}\nsearch {}\n".format(domain_name, domain_name))
 resolv_conf.close()
 
-# Block DNSMasq out the WAN
+# Block DNSMasq out the WAN (via bond0)
 os.system("iptables -I INPUT -p udp --dport 67 -i bond0 -j DROP")
 os.system("iptables -I INPUT -p udp --dport 53 -i bond0 -j DROP")
 os.system("iptables -I INPUT -p tcp --dport 53 -i bond0 -j DROP")
