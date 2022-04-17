@@ -271,6 +271,28 @@ resource "metal_port" "esxi_hosts" {
   }
 }
 
+data "template_file" "vars_file" {
+  template = "${file("${path.module}/templates/vars.py")}"
+  vars = {
+    private_subnets      = jsonencode(var.private_subnets),
+    private_vlans        = jsonencode(metal_vlan.private_vlans.*.vxlan),
+    public_subnets       = jsonencode(var.public_subnets),
+    public_vlans         = jsonencode(metal_vlan.public_vlans.*.vxlan),
+    public_cidrs         = jsonencode(metal_reserved_ip_block.ip_blocks.*.cidr_notation),
+    domain_name          = var.domain_name,
+    vcenter_network      = var.vcenter_portgroup_name,
+    vcenter_fqdn         = format("vcva.%s", var.domain_name),
+    vcenter_user         = var.vcenter_user_name,
+    vcenter_domain       = var.vcenter_domain,
+    sso_password         = random_password.sso_password.result,
+    vcenter_cluster_name = var.vcenter_cluster_name,
+    plan_type            = var.esxi_size,
+    esx_passwords        = jsonencode(metal_device.esxi_hosts.*.root_password),
+    dc_name              = var.vcenter_datacenter_name,
+    metal_token          = var.auth_token,
+  }
+}
+
 # SSH to the router's public IPv4 address and create remote files, populating them with user-assigned and TF-generated values
 # * $HOME/bootstrap/vars.py
 # * $HOME/bootstrap/pre_reqs.py
@@ -289,31 +311,13 @@ resource "null_resource" "run_pre_reqs" {
   }
 
   provisioner "file" {
-    content = templatefile("${path.module}/templates/vars.py", {
-      private_subnets      = jsonencode(var.private_subnets),
-      private_vlans        = jsonencode(metal_vlan.private_vlans.*.vxlan),
-      public_subnets       = jsonencode(var.public_subnets),
-      public_vlans         = jsonencode(metal_vlan.public_vlans.*.vxlan),
-      public_cidrs         = jsonencode(metal_reserved_ip_block.ip_blocks.*.cidr_notation),
-      domain_name          = var.domain_name,
-      vcenter_network      = var.vcenter_portgroup_name,
-      vcenter_fqdn         = format("vcva.%s", var.domain_name),
-      vcenter_user         = var.vcenter_user_name,
-      vcenter_domain       = var.vcenter_domain,
-      sso_password         = random_password.sso_password.result,
-      vcenter_cluster_name = var.vcenter_cluster_name,
-      plan_type            = var.esxi_size,
-      esx_passwords        = jsonencode(metal_device.esxi_hosts.*.root_password),
-      dc_name              = var.vcenter_datacenter_name,
-      metal_token          = var.auth_token,
-    })
-
-    destination = "$HOME/bootstrap/vars.py"
+    content = "${data.template_file.vars_file.rendered}"
+    destination = "bootstrap/vars.py"
   }
 
   provisioner "file" {
     content     = file("${path.module}/templates/pre_reqs.py")
-    destination = "$HOME/bootstrap/pre_reqs.py"
+    destination = "bootstrap/pre_reqs.py"
   }
 
   provisioner "remote-exec" {
