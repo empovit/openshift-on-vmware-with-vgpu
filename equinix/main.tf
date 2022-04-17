@@ -294,8 +294,8 @@ data "template_file" "vars_file" {
 }
 
 # SSH to the router's public IPv4 address and create remote files, populating them with user-assigned and TF-generated values
-# * $HOME/bootstrap/vars.py
-# * $HOME/bootstrap/pre_reqs.py
+# * ~/bootstrap/vars.py
+# * ~/bootstrap/pre_reqs.py
 # Then, remotely execute `$HOME/bootstrap/pre_reqs.py`
 # https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource
 resource "null_resource" "run_pre_reqs" {
@@ -352,7 +352,7 @@ resource "null_resource" "copy_gcs_key" {
   }
   provisioner "file" {
     content     = file(local.gcs_key_path)
-    destination = "$HOME/bootstrap/gcp_storage_reader.json"
+    destination = "bootstrap/gcp_storage_reader.json"
   }
 }
 
@@ -371,7 +371,7 @@ resource "null_resource" "download_vcenter_iso" {
 
   provisioner "file" {
     content     = data.template_file.download_vcenter.rendered
-    destination = "$HOME/bootstrap/download_vcenter.sh"
+    destination = "bootstrap/download_vcenter.sh"
   }
 
   provisioner "remote-exec" {
@@ -424,7 +424,7 @@ resource "null_resource" "install_vpn_server" {
 
   provisioner "file" {
     content     = data.template_file.vpn_installer.rendered
-    destination = "$HOME/bootstrap/vpn_installer.sh"
+    destination = "bootstrap/vpn_installer.sh"
   }
 
   provisioner "remote-exec" {
@@ -475,7 +475,7 @@ resource "null_resource" "copy_vcva_template" {
       vcva_deployment_option  = var.vcva_deployment_option
     })
 
-    destination = "$HOME/bootstrap/vcva_template.json"
+    destination = "bootstrap/vcva_template.json"
   }
 }
 
@@ -491,7 +491,7 @@ resource "null_resource" "copy_update_uplinks" {
 
   provisioner "file" {
     content     = file("${path.module}/templates/update_uplinks.py")
-    destination = "$HOME/bootstrap/update_uplinks.py"
+    destination = "bootstrap/update_uplinks.py"
   }
 }
 
@@ -507,7 +507,7 @@ resource "null_resource" "esx_network_prereqs" {
 
   provisioner "file" {
     content     = file("${path.module}/templates/esx_host_networking.py")
-    destination = "$HOME/bootstrap/esx_host_networking.py"
+    destination = "bootstrap/esx_host_networking.py"
   }
 }
 
@@ -551,17 +551,17 @@ resource "null_resource" "deploy_vcva" {
   # This script extends the datastore to span all the available disks of an ESXi host.
   provisioner "file" {
     source      = "${path.module}/templates/extend_datastore.sh"
-    destination = "$HOME/bootstrap/extend_datastore.sh"
+    destination = "bootstrap/extend_datastore.sh"
   }
 
   provisioner "file" {
     content     = file("${path.module}/templates/vsan_claim.py")
-    destination = "$HOME/bootstrap/vsan_claim.py"
+    destination = "bootstrap/vsan_claim.py"
   }
 
   provisioner "file" {
     content     = file("${path.module}/templates/deploy_vcva.py")
-    destination = "$HOME/bootstrap/deploy_vcva.py"
+    destination = "bootstrap/deploy_vcva.py"
   }
 
   provisioner "remote-exec" {
