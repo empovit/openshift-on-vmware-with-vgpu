@@ -197,7 +197,7 @@ variable "vcenter_domain" {
 variable "vcenter_user_name" {
   description = "This will be the admin user for vSphere SSO"
   type        = string
-  default     = "Administrator"
+  default     = "administrator"
 }
 
 variable "s3_url" {

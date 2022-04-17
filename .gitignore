@@ -3,3 +3,5 @@
 *.iso
 *.vib
 tmp/
+vsanapiutils.py
+vsanmgmtObjects.py
