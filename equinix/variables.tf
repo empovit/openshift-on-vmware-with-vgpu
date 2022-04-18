@@ -197,7 +197,7 @@ variable "vcenter_domain" {
 variable "vcenter_user_name" {
   description = "This will be the admin user for vSphere SSO"
   type        = string
-  default     = "administrator"
+  default     = "Administrator"
 }
 
 variable "s3_url" {
@@ -278,8 +278,9 @@ variable "reservations" {
 variable "vcva_deployment_option" {
   description = <<-EOF
   Size of the vCenter appliance: tiny, tiny-lstorage, ..., small, etc.
-  See https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vcenter.install.doc/GUID-457EAE1F-B08A-4E64-8506-8A3FA84A0446.html  
-  for full list of options
+  Each option has different CPU, memory, and storage requirements.
+  For the full list of options, see
+  https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vcenter.install.doc/GUID-457EAE1F-B08A-4E64-8506-8A3FA84A0446.html
   EOF
   type        = string
   default     = "small"

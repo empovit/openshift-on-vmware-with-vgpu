@@ -33,7 +33,6 @@ words = words_list()
 os.system(
     "echo 'iptables-persistent iptables-persistent/autosave_v4 boolean true' | sudo debconf-set-selections"
 )
-
 # Persist iptables IPv6 rules
 os.system(
     "echo 'iptables-persistent iptables-persistent/autosave_v6 boolean true' | sudo debconf-set-selections"

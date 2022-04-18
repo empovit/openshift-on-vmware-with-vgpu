@@ -1,9 +1,8 @@
-# Equinix Metal API token
 provider "metal" {
   auth_token = var.auth_token
 }
 
-# Generate the de-duplication part of an SSH key name
+# the de-duplication part of different SSH keys used for the same project
 resource "random_string" "ssh_unique" {
   length  = 5
   special = false
@@ -13,22 +12,16 @@ resource "random_string" "ssh_unique" {
 locals {
   ssh_user               = "root"
 
-  # Generate a unique SSH key name out of the project name and a random string
+  # unique SSH key name out of the project name and a random string
   project_name_sanitized = replace(var.project_name, "/[ ]/", "_")
+
   ssh_key_name = format("%s-%s-key", local.project_name_sanitized, random_string.ssh_unique.result)
 
   # List the specified GCS key file in current working directory or empty filename
   gcs_keys_cwd = flatten([[fileset(path.cwd, var.gcs_key_name)], ""])
-
   # Find the first GCS key path that's not empty, i.e. was either explicitly specified or found.
   # If no files were found, take the module's path. Note that the relative path is deprecated.
   gcs_key_path = coalesce(abspath(var.path_to_gcs_key), path.module, var.relative_path_to_gcs_key, local.gcs_keys_cwd[0])
-
-  # Reference:
-  # https://www.terraform.io/language/functions/flatten
-  # https://www.terraform.io/language/functions/fileset
-  # https://www.terraform.io/language/expressions/references#path-cwd
-  # https://www.terraform.io/language/functions/coalesce
 }
 
 # Create a metal project or use an existing one
@@ -46,17 +39,13 @@ locals {
 }
 
 # Generate a secure private key
-# https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/private_key
 resource "tls_private_key" "ssh_key_pair" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-# TODO: Allow re-using an existing key pair instead of generating a new one every time
-
 # Manage the unique user SSH key that will be injected in the project's machines.
 # Must explicitely depend on the project
-# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/ssh_key
 resource "metal_ssh_key" "ssh_pub_key" {
   depends_on = [metal_project.new_project]
   name       = local.ssh_key_name
@@ -75,8 +64,13 @@ resource "local_file" "project_private_key_pem" {
   }
 }
 
+# Equinix Metal facility datastore. Find out the facility the router is deployed in,
+# when the user specified only a metro, but not a particular facility
+data "metal_facility" "facility" {
+  code = metal_device.router.deployed_facility
+}
+
 # Reserve blocks of public IPs, a block per user-requested subned
-# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/reserved_ip_block
 resource "metal_reserved_ip_block" "ip_blocks" {
   count      = length(var.public_subnets)
   project_id = local.project_id
@@ -95,7 +89,6 @@ resource "metal_reserved_ip_block" "esx_ip_blocks" {
 }
 
 # Create private VLANs, by default these are: a private VM network (management), vMotion, and vSAN
-# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/vlan
 resource "metal_vlan" "private_vlans" {
   count       = length(var.private_subnets)
   facility    = var.facility == "" ? null : var.facility
@@ -126,21 +119,12 @@ resource "metal_device" "router" {
   hardware_reservation_id = lookup(var.reservations, var.router_hostname, "")
 }
 
-# Equinix Metal facility datastore. Find out the facility the router is deployed in,
-# when the user specified only a metro, but not a particular facility
-# https://registry.terraform.io/providers/equinix/metal/latest/docs/data-sources/facility
-data "metal_facility" "facility" {
-  code = metal_device.router.deployed_facility
-}
-
 # Find out if the facility is an IBX (International Business Exchange™) one
 locals {
   hybrid_bonded_router = contains(data.metal_facility.facility.features, "ibx") ? true : false
 }
 
 # A network port on the router. In an IBX facility, that will be the bonded interface, otherwise eth1
-# https://metal.equinix.com/developers/docs/layer2-networking/overview/
-# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/port
 resource "metal_port" "router" {
   bonded   = local.hybrid_bonded_router
   port_id  = [for p in metal_device.router.ports : p.id if p.name == (local.hybrid_bonded_router ? "bond0" : "eth1")][0]
@@ -157,7 +141,6 @@ resource "metal_port" "router" {
 }
 
 # Assign the ESXi subnet to the router device
-# https://registry.terraform.io/providers/equinix/metal/latest/docs/resources/ip_attachment
 resource "metal_ip_attachment" "block_assignment" {
   depends_on    = [metal_port.router]
   count         = length(metal_reserved_ip_block.ip_blocks)
@@ -177,19 +160,16 @@ resource "metal_device" "esxi_hosts" {
   billing_cycle           = var.billing_cycle
   project_id              = local.project_id
   hardware_reservation_id = lookup(var.reservations, format("%s%02d", var.esxi_hostname, count.index + 1), "")
-
   # Assign a public IPv4 address from the reserved block
   ip_address {
     type            = "public_ipv4"
     cidr            = 29
     reservation_ids = [element(metal_reserved_ip_block.esx_ip_blocks.*.id, count.index)]
   }
-
   # Assing a private IPv4 address
   ip_address {
     type = "private_ipv4"
   }
-
   # Assign a public IPv6 address
   ip_address {
     type = "public_ipv6"
@@ -297,7 +277,6 @@ data "template_file" "vars_file" {
 # * ~/bootstrap/vars.py
 # * ~/bootstrap/pre_reqs.py
 # Then, remotely execute `$HOME/bootstrap/pre_reqs.py`
-# https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource
 resource "null_resource" "run_pre_reqs" {
   connection {
     type        = "ssh"
@@ -512,7 +491,6 @@ resource "null_resource" "esx_network_prereqs" {
 }
 
 # Update the networking of each ESXi host by running the Python scrips on the router
-# https://metal.equinix.com/developers/guides/vmware-esxi/#quirks-of-standard-vswitch
 resource "null_resource" "apply_esx_network_config" {
   count = length(metal_device.esxi_hosts)
   depends_on = [
