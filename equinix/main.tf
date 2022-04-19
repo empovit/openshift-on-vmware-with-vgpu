@@ -189,7 +189,7 @@ resource "null_resource" "reboot_pre_upgrade" {
 
 # Generate an ESXi version update script file
 data "template_file" "upgrade_script" {
-  count    = var.update_esxi ? length(metal_device.esxi_hosts) : 0
+  count    = var.update_esxi ? 1 : 0
   template = "${file("${path.module}/templates/update_esxi.sh.tpl")}"
   vars = {
     esxi_update_filename = "${var.esxi_update_filename}"
@@ -210,7 +210,7 @@ resource "null_resource" "upgrade_nodes" {
   }
 
   provisioner "file" {
-    content     = "${element(data.template_file.upgrade_script.*.rendered, count.index)}}"
+    content     = "${data.template_file.upgrade_script.rendered}"
     destination = "/tmp/update_esxi.sh"
   }
 
