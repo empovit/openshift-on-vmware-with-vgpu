@@ -1,0 +1,40 @@
+---
+- name: S3 artifacts for vSphere deployment
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Python prerequisites
+      pip:
+        name: ['boto3', 'botocore']
+
+    # - name: Minio deployment
+# Run minio s3-compatible storage as a container
+# podman run \
+#     -d \
+#     -p 9000:9000 \
+#     -p 9001:9001 \
+#     --name minio \
+#     -v /root/s3-data:/data \
+#     -e "MINIO_ROOT_USER=$1" \
+#     -e "MINIO_ROOT_PASSWORD=$2" \
+#     quay.io/minio/minio server /data --console-address ":9001"
+
+    - name: Bucket creation
+      amazon.aws.aws_s3:
+        bucket: "{{ s3_bucket }}"
+        s3_url: "{{ s3_url }}"
+        mode: create
+
+    - name: Deployment artifacts upload
+      amazon.aws.aws_s3:
+        bucket: "{{ s3_bucket }}"
+        object: "{{ item }}"
+        src: "{{ s3_artifacts_dir }}/{{ item }}"
+        s3_url: "{{ s3_url }}"
+        mode: put
+        overwrite: different
+      with_items:
+        - vsanapiutils.py
+        - vsanmgmtObjects.py
+        - NVD-VGPU_510.47.03-1OEM.702.0.0.17630552_19297162.zip
+        - VMware-VCSA-all-7.0.3-19234570.iso

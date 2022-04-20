@@ -1,5 +1,5 @@
 .terraform*
-!.terraform.local.hcl
+!.terraform.lock.hcl
 /override.tf
 /terraform.tfvars
 terraform.tfstate*

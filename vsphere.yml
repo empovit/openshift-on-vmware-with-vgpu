@@ -1,0 +1,10 @@
+---
+- name: VMware vSphere deployment
+  hosts: localhost
+  tasks:
+    - name: Current Terraform state
+      community.general.terraform:
+        project_path: "{{ playbook_dir }}/equinix"
+        state_file: "{{ playbook_dir }}/equinix/terraform.tfstate"
+        state: planned
+        plan_file: "{{ playbook_dir }}/equinix/terraform.tfplan"
