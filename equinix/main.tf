@@ -210,7 +210,7 @@ resource "null_resource" "upgrade_nodes" {
   }
 
   provisioner "file" {
-    content     = "${data.template_file.upgrade_script.rendered}"
+    content     = "${data.template_file.upgrade_script.0.rendered}"
     destination = "/tmp/update_esxi.sh"
   }
 
