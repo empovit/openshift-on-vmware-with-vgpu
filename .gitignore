@@ -3,6 +3,4 @@
 *.iso
 *.vib
 tmp/
-vsanapiutils.py
-vsanmgmtObjects.py
-equinix-metal-vsphere
+equinix_metal

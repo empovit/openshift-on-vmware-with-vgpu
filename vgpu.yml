@@ -1,0 +1,13 @@
+---
+- name: Install NVIDIA vGPU host driver
+  hosts: localhost
+  tasks:
+    - name: Download vGPU VIB
+      ansible.builtin.command: "mc cp s3/{{ s3_bucket }}/{{ vgpu_vib_filename }} ."
+      args:
+        chdir: bootstrap
+    - name: Copy script for installing vGPU VIB
+      ansible.builtin.copy:
+        src: install_vgpu_vib.py
+        dest: bootstrap/install_vgpu_vib.py
+        mode: u+x
