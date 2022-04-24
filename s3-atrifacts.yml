@@ -6,25 +6,11 @@
     - name: Python prerequisites
       pip:
         name: ['boto3', 'botocore']
-
-    # - name: Minio deployment
-# Run minio s3-compatible storage as a container
-# podman run \
-#     -d \
-#     -p 9000:9000 \
-#     -p 9001:9001 \
-#     --name minio \
-#     -v /root/s3-data:/data \
-#     -e "MINIO_ROOT_USER=$1" \
-#     -e "MINIO_ROOT_PASSWORD=$2" \
-#     quay.io/minio/minio server /data --console-address ":9001"
-
     - name: Bucket creation
       amazon.aws.aws_s3:
         bucket: "{{ s3_bucket }}"
         s3_url: "{{ s3_url }}"
         mode: create
-
     - name: Deployment artifacts upload
       amazon.aws.aws_s3:
         bucket: "{{ s3_bucket }}"

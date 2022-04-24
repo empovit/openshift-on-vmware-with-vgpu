@@ -1,0 +1,30 @@
+---
+- name: Local deployment of S3-compatible storage
+  hosts: s3-server
+  gather_facts: false
+  tasks:
+    - name: Install Podman
+      ansible.builtin.package:
+        name: podman
+        state: present  
+    - name: Re-create a Minio container with systemd service file generated in /tmp/
+      containers.podman.podman_container:
+        name: minio-server
+        image: quay.io/minio/minio
+        command: server /data --console-address ":9001"
+        state: present
+        recreate: yes
+        ports:
+            - "9000:9000"
+            - "9001:9001"
+        env:
+          MINIO_ROOT_USER: "{{ s3_access_key }}"
+          MINIO_ROOT_PASSWORD: "{{ s3_secret_key }}"
+        volumes_from:
+          - /data
+        generate_systemd:
+          path: /tmp/
+          restart_policy: always
+          time: 120
+          names: true
+          container_prefix: container
