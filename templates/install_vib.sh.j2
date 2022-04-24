@@ -1,0 +1,29 @@
+#!/bin/bash
+
+echo "Power off all VMs"
+vm_ids=$(vim-cmd vmsvc/getallvms)
+powered_on=()
+for vm in "${vm_ids[@]}"
+do
+    state=$(vim-cmd vmsvc/power.getstate $vm)
+    if [[ "$state" == "on" ]]
+    then
+        powered_on+=($vm)
+        vim-cmd vmsvc/power.off $vm
+    fi
+done
+
+echo "Move ESXi host to maintenance mode"
+esxcli system maintenanceMode set --enable true
+
+echo "Install VIB"
+esxcli software vib install -d /vmfs/volumes/datastore1/{{ vib_filename }}
+
+echo "Move ESXi host out of maintenance mode"
+esxcli system maintenanceMode set --enable false
+
+echo "Power on VMs"
+for vm in "${powered_on[@]}"
+do
+    vim-cmd vmsvc/power.on $vm
+done

@@ -9,7 +9,7 @@
     - name: vSphere installation scripts repo
       ansible.builtin.git:
         repo: "{{ equinix_metal_git_repo }}"
-        dest: "{{ equinix_metal_tf_dir }}"
+        dest: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
         version: "{{ equinix_metal_git_branch }}"
         single_branch: yes
     - name: Generate variables
