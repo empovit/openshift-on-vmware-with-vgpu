@@ -2,7 +2,6 @@ provider "metal" {
   auth_token = var.auth_token
 }
 
-# the de-duplication part of different SSH keys used for the same project
 resource "random_string" "ssh_unique" {
   length  = 5
   special = false
@@ -11,66 +10,51 @@ resource "random_string" "ssh_unique" {
 
 locals {
   ssh_user               = "root"
-
-  # unique SSH key name out of the project name and a random string
   project_name_sanitized = replace(var.project_name, "/[ ]/", "_")
 
   ssh_key_name = format("%s-%s-key", local.project_name_sanitized, random_string.ssh_unique.result)
 
-  # List the specified GCS key file in current working directory or empty filename
   gcs_keys_cwd = flatten([[fileset(path.cwd, var.gcs_key_name)], ""])
-  # Find the first GCS key path that's not empty, i.e. was either explicitly specified or found.
-  # If no files were found, take the module's path. Note that the relative path is deprecated.
   gcs_key_path = coalesce(abspath(var.path_to_gcs_key), path.module, var.relative_path_to_gcs_key, local.gcs_keys_cwd[0])
 }
 
-# Create a metal project or use an existing one
 resource "metal_project" "new_project" {
   count           = var.create_project ? 1 : 0
   name            = var.project_name
   organization_id = var.organization_id
 }
 
-# Remember the ID of a newely created project (if requested), or take the ID given by the user
 locals {
   depends_on = [metal_project.new_project]
   count      = var.create_project ? 1 : 0
   project_id = var.create_project ? metal_project.new_project[0].id : var.project_id
 }
 
-# Generate a secure private key
 resource "tls_private_key" "ssh_key_pair" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-# Manage the unique user SSH key that will be injected in the project's machines.
-# Must explicitely depend on the project
 resource "metal_ssh_key" "ssh_pub_key" {
   depends_on = [metal_project.new_project]
   name       = local.ssh_key_name
   public_key = chomp(tls_private_key.ssh_key_pair.public_key_openssh)
 }
 
-# Save the private SSH key to a local file
 resource "local_file" "project_private_key_pem" {
   content         = chomp(tls_private_key.ssh_key_pair.private_key_pem)
   filename        = pathexpand("~/.ssh/${local.ssh_key_name}")
   file_permission = "0600"
 
-  # Back up the private SSH key associated with the project. Why?
   provisioner "local-exec" {
     command = "cp ~/.ssh/${local.ssh_key_name} ~/.ssh/${local.ssh_key_name}.bak"
   }
 }
 
-# Equinix Metal facility datastore. Find out the facility the router is deployed in,
-# when the user specified only a metro, but not a particular facility
 data "metal_facility" "facility" {
   code = metal_device.router.deployed_facility
 }
 
-# Reserve blocks of public IPs, a block per user-requested subned
 resource "metal_reserved_ip_block" "ip_blocks" {
   count      = length(var.public_subnets)
   project_id = local.project_id
@@ -79,7 +63,6 @@ resource "metal_reserved_ip_block" "ip_blocks" {
   quantity   = element(var.public_subnets.*.ip_count, count.index)
 }
 
-# Reserve blocks of 8 IP addresses per ESXi host (for VMs?)
 resource "metal_reserved_ip_block" "esx_ip_blocks" {
   count      = var.esxi_host_count
   project_id = local.project_id
@@ -88,7 +71,6 @@ resource "metal_reserved_ip_block" "esx_ip_blocks" {
   quantity   = 8
 }
 
-# Create private VLANs, by default these are: a private VM network (management), vMotion, and vSAN
 resource "metal_vlan" "private_vlans" {
   count       = length(var.private_subnets)
   facility    = var.facility == "" ? null : var.facility
@@ -97,7 +79,6 @@ resource "metal_vlan" "private_vlans" {
   description = jsonencode(element(var.private_subnets.*.name, count.index))
 }
 
-# Create public VLANs, by default this is a public VM network
 resource "metal_vlan" "public_vlans" {
   count       = length(var.public_subnets)
   facility    = var.facility == "" ? null : var.facility
@@ -106,7 +87,6 @@ resource "metal_vlan" "public_vlans" {
   description = jsonencode(element(var.public_subnets.*.name, count.index))
 }
 
-# Create a router(?), by default it's an "c3.small.x86" Ubuntu machine.
 resource "metal_device" "router" {
   depends_on              = [metal_ssh_key.ssh_pub_key]
   hostname                = var.router_hostname
@@ -119,28 +99,23 @@ resource "metal_device" "router" {
   hardware_reservation_id = lookup(var.reservations, var.router_hostname, "")
 }
 
-# Find out if the facility is an IBX (International Business Exchange™) one
 locals {
   hybrid_bonded_router = contains(data.metal_facility.facility.features, "ibx") ? true : false
 }
 
-# A network port on the router. In an IBX facility, that will be the bonded interface, otherwise eth1
 resource "metal_port" "router" {
   bonded   = local.hybrid_bonded_router
   port_id  = [for p in metal_device.router.ports : p.id if p.name == (local.hybrid_bonded_router ? "bond0" : "eth1")][0]
   vlan_ids = concat(metal_vlan.private_vlans.*.id, metal_vlan.public_vlans.*.id)
 
-  # A VLAN can't be deleted when there are ports connected to it.
-  # If the device is deleted without first disconnecting it from VLANs,
-  # we won't be able to detach ports properly and the VLAN
+  # vlans can't delete when ports are connected to them.
+  # if the device is deleted without disconnecting first,
+  # we won't be able to detach ports properly and the vlan
   # delete will fail until the device instance is completely
-  # deleted. This option will reset the port to its default setting, meaning 
-  # a bond port will be converted to Layer3 without VLANs attached, and eth ports 
-  # will be bonded without a native VLAN and VLANs attached
+  # deleted.
   reset_on_delete = true
 }
 
-# Assign the ESXi subnet to the router device
 resource "metal_ip_attachment" "block_assignment" {
   depends_on    = [metal_port.router]
   count         = length(metal_reserved_ip_block.ip_blocks)
@@ -148,7 +123,6 @@ resource "metal_ip_attachment" "block_assignment" {
   cidr_notation = element(metal_reserved_ip_block.ip_blocks.*.cidr_notation, count.index)
 }
 
-# Create ESXi hosts
 resource "metal_device" "esxi_hosts" {
   depends_on              = [metal_ssh_key.ssh_pub_key]
   count                   = var.esxi_host_count
@@ -160,23 +134,19 @@ resource "metal_device" "esxi_hosts" {
   billing_cycle           = var.billing_cycle
   project_id              = local.project_id
   hardware_reservation_id = lookup(var.reservations, format("%s%02d", var.esxi_hostname, count.index + 1), "")
-  # Assign a public IPv4 address from the reserved block
   ip_address {
     type            = "public_ipv4"
     cidr            = 29
     reservation_ids = [element(metal_reserved_ip_block.esx_ip_blocks.*.id, count.index)]
   }
-  # Assing a private IPv4 address
   ip_address {
     type = "private_ipv4"
   }
-  # Assign a public IPv6 address
   ip_address {
     type = "public_ipv6"
   }
 }
 
-# Wait for the post provision reboot process to complete before updating ESXi
 resource "null_resource" "reboot_pre_upgrade" {
 
   depends_on = [metal_device.esxi_hosts]
@@ -187,7 +157,6 @@ resource "null_resource" "reboot_pre_upgrade" {
   }
 }
 
-# Generate an ESXi version update script file
 data "template_file" "upgrade_script" {
   count    = var.update_esxi ? 1 : 0
   template = "${file("${path.module}/templates/update_esxi.sh.tpl")}"
@@ -224,7 +193,6 @@ resource "null_resource" "upgrade_nodes" {
   }
 }
 
-# Wait for the post provision reboot process to complete before updating ESXi
 resource "null_resource" "reboot_post_upgrade" {
 
   depends_on = [null_resource.upgrade_nodes]
@@ -235,7 +203,6 @@ resource "null_resource" "reboot_post_upgrade" {
   }
 }
 
-# Network ports on the ESXi hosts. The eth1 will be taken out of the bond0, and connected to the VLANs - private & public
 resource "metal_port" "esxi_hosts" {
   depends_on  = [null_resource.reboot_post_upgrade]
   count       = length(metal_device.esxi_hosts)
@@ -273,10 +240,6 @@ data "template_file" "vars_file" {
   }
 }
 
-# SSH to the router's public IPv4 address and create remote files, populating them with user-assigned and TF-generated values
-# * ~/bootstrap/vars.py
-# * ~/bootstrap/pre_reqs.py
-# Then, remotely execute `$HOME/bootstrap/pre_reqs.py`
 resource "null_resource" "run_pre_reqs" {
   connection {
     type        = "ssh"
@@ -304,7 +267,6 @@ resource "null_resource" "run_pre_reqs" {
   }
 }
 
-# Populate locally the script for downloading a vCenter ISO via either AWS S3 or GCS protocol
 data "template_file" "download_vcenter" {
   template = file("${path.module}/templates/download_vcenter.sh")
   vars = {
@@ -319,7 +281,6 @@ data "template_file" "download_vcenter" {
   }
 }
 
-# Copy the local GCS keys (if using GCS) over to the router
 resource "null_resource" "copy_gcs_key" {
   count      = var.object_store_tool == "gcs" ? 1 : 0
   depends_on = [null_resource.run_pre_reqs]
@@ -335,7 +296,6 @@ resource "null_resource" "copy_gcs_key" {
   }
 }
 
-# Copy the rendered script for downloading vCenter and run it
 resource "null_resource" "download_vcenter_iso" {
   depends_on = [
     null_resource.run_pre_reqs,
@@ -388,7 +348,6 @@ data "template_file" "vpn_installer" {
   }
 }
 
-# Set up an IPsec VPN server on the router
 resource "null_resource" "install_vpn_server" {
   depends_on = [
     null_resource.run_pre_reqs,
@@ -431,7 +390,7 @@ resource "random_password" "sso_password" {
   special          = true
 }
 
-# Populate the deployment configuration of the vCenter Virtual Appliance (vcva) and copy it to the router
+
 resource "null_resource" "copy_vcva_template" {
   depends_on = [
     null_resource.run_pre_reqs,
@@ -458,7 +417,6 @@ resource "null_resource" "copy_vcva_template" {
   }
 }
 
-# Copy the Python script for updating uplinks on the ESXi hosts to the router
 resource "null_resource" "copy_update_uplinks" {
   depends_on = [null_resource.run_pre_reqs]
   connection {
@@ -474,7 +432,6 @@ resource "null_resource" "copy_update_uplinks" {
   }
 }
 
-# Copy the Python script for updating ESXi host networking to the router
 resource "null_resource" "esx_network_prereqs" {
   depends_on = [null_resource.run_pre_reqs]
   connection {
@@ -490,7 +447,6 @@ resource "null_resource" "esx_network_prereqs" {
   }
 }
 
-# Update the networking of each ESXi host by running the Python scrips on the router
 resource "null_resource" "apply_esx_network_config" {
   count = length(metal_device.esxi_hosts)
   depends_on = [
@@ -512,7 +468,6 @@ resource "null_resource" "apply_esx_network_config" {
   }
 }
 
-# Deploy vCenter Virtual Apliance (VCVA)
 resource "null_resource" "deploy_vcva" {
   depends_on = [
     null_resource.apply_esx_network_config,
@@ -525,8 +480,6 @@ resource "null_resource" "deploy_vcva" {
     host        = metal_device.router.access_public_ipv4
   }
 
-  # If there's only one ESXi server (without vSAN), the default datastore might not be enought in install vCenter. 
-  # This script extends the datastore to span all the available disks of an ESXi host.
   provisioner "file" {
     source      = "${path.module}/templates/extend_datastore.sh"
     destination = "bootstrap/extend_datastore.sh"
@@ -547,7 +500,6 @@ resource "null_resource" "deploy_vcva" {
   }
 }
 
-# Set up vSAN if there are more than one ESXi host
 resource "null_resource" "vsan_claim" {
   depends_on = [null_resource.deploy_vcva]
   count      = var.esxi_host_count == 1 ? 0 : 1
