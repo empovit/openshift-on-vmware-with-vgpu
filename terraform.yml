@@ -16,13 +16,11 @@
       ansible.builtin.template:
         src: templates/terraform.tfvars.j2
         dest: "{{ equinix_metal_tf_dir }}/terraform.tfvars"
-    - name: Current Terraform state
+    - name: vSphere on Equinix Metal Terraform state
       community.general.terraform:
         project_path: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
-        state: planned
-        # state: present
+        state: present
         force_init: true
-        plan_file: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}/terraform.tfplan"
       register: tf_results
-    - debug:
+    - ansible.builtin.debug:
         var: tf_results.outputs.bastion_host.value

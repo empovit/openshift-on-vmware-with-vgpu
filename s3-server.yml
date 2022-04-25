@@ -1,7 +1,6 @@
 ---
 - name: Local deployment of S3-compatible storage
   hosts: s3-server
-  gather_facts: false
   tasks:
     - name: Install Podman
       ansible.builtin.package:

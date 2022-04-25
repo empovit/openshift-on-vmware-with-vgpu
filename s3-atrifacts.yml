@@ -1,7 +1,6 @@
 ---
 - name: S3 artifacts for vSphere deployment
   hosts: localhost
-  gather_facts: false
   tasks:
     - name: Python prerequisites
       ansible.builtin.pip:

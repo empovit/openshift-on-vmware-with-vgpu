@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+
+import ipaddress
+import os
+import sys
+from vars import (
+    private_subnets,
+    public_subnets,
+    public_cidrs,
+    esx_passwords,
+)
+
+subnets = private_subnets
+for i in range(len(public_cidrs)):
+    public_subnets[i]["cidr"] = public_cidrs[i]
+    subnets.append(public_subnets[i])
+
+esx = []
+for subnet in subnets:
+    if subnet["vsphere_service_type"] == "management":
+        for i in range(len(esx_passwords)):
+            esx.append({"private_ip": list(ipaddress.ip_network(
+                subnet["cidr"]).hosts())[i + 3].compressed})
+
+exit_status = 0
+for i in range(len(esx)):
+    ip = str(esx[i]["private_ip"])
+    print(f"ESXi host: {ip}")
+    exit_status = os.system(f'''
+        scp -i "$HOME/.ssh/esxi_key" "$HOME/bootstrap/{{ vib_filename }}" "root@{ip}:/vmfs/volumes/datastore1/{{ vib_filename }}" &&
+        scp -i "$HOME/.ssh/esxi_key" "$HOME/bootstrap/install_vib_esxi.sh" "root@{ip}:/vmfs/volumes/datastore1/install_vib_esxi.sh" &&
+        ssh -i "$HOME/.ssh/esxi_key" "root@{ip}" "sh -c /vmfs/volumes/datastore1/install_vib_esxi.sh"
+    ''') or exit_status
+
+sys.exit(1 if exit_status else 0)

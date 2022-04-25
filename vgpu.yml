@@ -1,21 +1,25 @@
 ---
-- name: Install NVIDIA vGPU host driver
+- name: NVIDIA vGPU host driver installation
   hosts: router
   remote_user: root
   vars:
     vib_filename: "NVD-VGPU_510.47.03-1OEM.702.0.0.17630552_19297162.zip"
   tasks:
-    - name: Download vGPU VIB
+    - name: vGPU VIB from S3 storage
       ansible.builtin.command: "mc cp s3/{{ s3_bucket }}/{{ vib_filename }} ."
       args:
         chdir: bootstrap
-    - name: Generate script for installing vGPU VIB
+    - name: Script for installing vGPU on all remote ESXi hosts
       ansible.builtin.template:
-        src: templates/install_vib.sh.j2
-        dest: bootstrap/install_vib.sh
+        src: templates/install_vgpu.py.j2
+        dest: bootstrap/install_vgpu.py
         mode: u=xwr,g=r,o=r
-    - name: Copy script for copying vGPU installation files to ESXi hosts
-      ansible.builtin.copy:
-        src: copy_vib_files.sh
-        dest: bootstrap/copy_vib_files.sh
+    - name: Script for locally installing VIB on an ESXi host
+      ansible.builtin.template:
+        src: templates/install_vib_esxi.sh.j2
+        dest: bootstrap/install_vib_esxi.sh
         mode: u=xwr,g=r,o=r
+    - name: Installing vGPU host driver
+      ansible.builtin.command: "python3 $HOME/bootstrap/install_vgpu.py"
+      args:
+        chdir: bootstrap
