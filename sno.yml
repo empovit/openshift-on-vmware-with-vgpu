@@ -1,15 +1,50 @@
+# https://docs.ansible.com/ansible/latest/collections/community/vmware/index.html
+# https://docs.ansible.com/ansible/latest/collections/community/vmware/docsite/scenario_guide.html
+# https://docs.ansible.com/ansible/latest/collections/community/vmware/docsite/vmware_scenarios/scenario_vmware_http.html
+# https://docs.ansible.com/ansible/latest/collections/community/vmware/vmware_guest_module.html
 ---
 - name: Single-Node OpenShift
-  hosts: vcenter
+  hosts: localhost
+  gather_facts: no
   vars:
     vgpu_profile: "......"
   tasks:
-    # TODO: Need to run on localhost
-    # - name: Python prerequisites
-    #   ansible.builtin.pip:
-    #     name: 'PyVmomi'
+    - name: Python prerequisites
+      ansible.builtin.pip:
+        name: 'PyVmomi'
     - name: SNO cluster
     - name: VMware VM
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        name: sno_vm
+        state: poweredon
+        guest_id: rhel8_64Guest
+        disk:
+        - size_gb: 180
+          type: thin
+          datastore: datastore1
+        networks:
+        - name: VM Network
+          start_connected: yes
+        cdrom:
+          type: iso
+          iso_path: "[datastore1] livecd.iso"
+        hardware:
+          memory_mb: 32768
+          num_cpus: 8
+          scsi: paravirtual
+          boot_firmware: "efi"
+        customvalues:
+        - key: "pciPassthru.use64bitMMIO"
+          value: "TRUE"
+        - key: "pciPassthru.64bitMMIOSizeGB"
+          value: "512"
+        wait_for_ip_address: yes
+      delegate_to: localhost
+      register: deploy_vm
     - name: SNO installation
     - name: NFD operator installation
     - name: GPU operator installation
