@@ -1,0 +1,15 @@
+---
+- name: Single-Node OpenShift
+  hosts: vcenter
+  vars:
+    vgpu_profile: "......"
+  tasks:
+    # TODO: Need to run on localhost
+    # - name: Python prerequisites
+    #   ansible.builtin.pip:
+    #     name: 'PyVmomi'
+    - name: SNO cluster
+    - name: VMware VM
+    - name: SNO installation
+    - name: NFD operator installation
+    - name: GPU operator installation
