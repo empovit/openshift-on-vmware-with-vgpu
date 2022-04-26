@@ -22,25 +22,10 @@ The Equinix Metal server plan that has a vGPU-compatible GPU is [g2.large.x86](h
 
 Based on https://github.com/enkelprifti98/packet-esxi-6-7 and https://github.com/equinix/terraform-metal-vsphere, explained in detail in [Using VMware ESXi on Equinix Metal](https://metal.equinix.com/developers/guides/vmware-esxi/) and [Setting up Multi-node vSphere Cluster with VSan Support on Equinix Metal](https://metal.equinix.com/developers/guides/vmware/), respectively.
 
-Example `terraform.tfvars`:
+TODO: List Ansible variables
 
-```yaml
-auth_token = "<equinix_metal_api_key>"
-create_project = false
-project_id = "<project_id>" # select an existing project when create_project is false
-project_name = "equinix-vmware-vsphere-7" # used in SSH key name when create_project is false
-metro = "da"
-esxi_size = "g2.large.x86"
-esxi_host_count = 1
-esxi_hostname = "<prefix>-esxi-"
-vmware_os = "vmware_esxi_6_5"
-router_hostname = "<prefix>-vsphere-gateway"
-update_esxi = true
-esxi_update_filename = "ESXi-7.0U3d-19482537-standard"
-vcenter_iso_name = "VMware-VCSA-all-7.0.3-19480866.iso"
-vcva_deployment_option = "tiny"
-s3_url = "https://s3.amazonaws.com"
-s3_access_key = "<s3_access_key>"
-s3_secret_key = "<s3_secret_key>"
-object_store_bucket_name = "<s3_bucket_name>"
-```
+# Notes
+
+ansible-playbook terraform.yml -e "@tmp/vars.yml"
+ansible-playbook vgpu.yml -e "@tmp/vars.yml" -e "router_ip=145.40.77.185" -i tmp/test-inventory.yml
+ansible-playbook sno.yml -e "vcenter_ip=139.178.87.170" -e 'vcenter_password=$$vSNN23oG?HlDa9'

@@ -5,11 +5,13 @@
     - name: Python prerequisites
       ansible.builtin.pip:
         name: ['boto3', 'botocore']
+
     - name: Bucket creation
       amazon.aws.aws_s3:
         bucket: "{{ s3_bucket }}"
         s3_url: "{{ s3_url }}"
         mode: create
+
     - name: Deployment artifacts upload
       amazon.aws.aws_s3:
         bucket: "{{ s3_bucket }}"

@@ -6,6 +6,7 @@
       ansible.builtin.package:
         name: podman
         state: present  
+
     - name: Re-create a Minio container with systemd service file generated in /tmp/
       containers.podman.podman_container:
         name: minio-server

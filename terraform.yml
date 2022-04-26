@@ -1,6 +1,7 @@
 ---
 - name: VMware vSphere deployment
   hosts: localhost
+  gather_facts: no
   vars:
     equinix_metal_git_repo: https://github.com/empovit/equinix-metal-vsphere
     equinix_metal_git_branch: all-fixes
@@ -12,16 +13,19 @@
         dest: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
         version: "{{ equinix_metal_git_branch }}"
         single_branch: yes
+
     - name: Generate variables
       ansible.builtin.template:
         src: templates/terraform.tfvars.j2
         dest: "{{ equinix_metal_tf_dir }}/terraform.tfvars"
+
     - name: vSphere on Equinix Metal Terraform state
       community.general.terraform:
         project_path: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
         state: present
         force_init: true
       register: tf_results
+
     - ansible.builtin.debug:
         msg: 
         - "Bastion host: {{ tf_results.outputs.bastion_host.value }}"

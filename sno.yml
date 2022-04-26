@@ -7,27 +7,39 @@
   hosts: localhost
   gather_facts: no
   vars:
+    vcenter_username: "Administrator@vsphere.local"
     vgpu_profile: "......"
   tasks:
     - name: Python prerequisites
       ansible.builtin.pip:
         name: 'PyVmomi'
+
+    - name: vGPU setup
+      ansible.builtin.shell: echo "vGPU setup"
+
     - name: SNO cluster
+      ansible.builtin.shell: echo "SNO cluster"
+
+    - name: ISO download
+      ansible.builtin.shell: echo "ISO download"
+
     - name: VMware VM
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_ip }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
         validate_certs: no
         name: sno_vm
-        state: poweredon
+        state: present
         guest_id: rhel8_64Guest
         disk:
         - size_gb: 180
           type: thin
           datastore: datastore1
         networks:
-        - name: VM Network
+        - name: VM Public Net 1
           start_connected: yes
         cdrom:
           type: iso
@@ -37,7 +49,7 @@
           num_cpus: 8
           scsi: paravirtual
           boot_firmware: "efi"
-        customvalues:
+        advanced_settings:
         - key: "pciPassthru.use64bitMMIO"
           value: "TRUE"
         - key: "pciPassthru.64bitMMIOSizeGB"
@@ -45,6 +57,12 @@
         wait_for_ip_address: yes
       delegate_to: localhost
       register: deploy_vm
+
     - name: SNO installation
+      ansible.builtin.shell: echo "SNO installation"
+
     - name: NFD operator installation
+      ansible.builtin.shell: echo "NFD operator"
+
     - name: GPU operator installation
+      ansible.builtin.shell: echo "GPU operator"
