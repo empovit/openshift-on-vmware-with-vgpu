@@ -26,6 +26,9 @@ TODO: List Ansible variables
 
 # Notes
 
+TODO:
+* Reboot ESXi host after installing vGPU VIB
+
 ansible-playbook terraform.yml -e "@tmp/vars.yml"
 ansible-playbook vgpu.yml -e "@tmp/vars.yml" -e "router_ip=145.40.77.185" -i tmp/test-inventory.yml
 ansible-playbook sno.yml -e "vcenter_ip=139.178.87.170" -e 'vcenter_password=$$vSNN23oG?HlDa9'

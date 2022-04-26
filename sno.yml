@@ -8,14 +8,23 @@
   gather_facts: no
   vars:
     vcenter_username: "Administrator@vsphere.local"
-    vgpu_profile: "......"
+    # Run `nvidia-smi vgpu -s | sort -u | grep -i grid | awk '{print "grid_"tolower($2)}'` on ESXi to see supported profiles
+    # or `vim-cmd hostsvc/hostconfig` and scroll down to `sharedPassthruGpuTypes`
+    vgpu_profile: "undefined" 
   tasks:
     - name: Python prerequisites
       ansible.builtin.pip:
-        name: 'PyVmomi'
+        name: "PyVmomi"
 
-    - name: vGPU setup
-      ansible.builtin.shell: echo "vGPU setup"
+    # - name: Host graphics for vGPU setup
+    #   community.vmware.vmware_host_config_manager:
+    #     hostname: "{{ vcenter_ip }}"
+    #     username: "{{ vcenter_username }}"
+    #     password: "{{ vcenter_password }}"
+    #     esxi_hostname: "{{ esxi_hostname }}"
+    #     # the list of advanced options can be found by running `vim-cmd hostsvc/advopt/options` on ESXi host
+    #     options:
+    #         'Config.Hardware.graphics.': false
 
     - name: SNO cluster
       ansible.builtin.shell: echo "SNO cluster"
