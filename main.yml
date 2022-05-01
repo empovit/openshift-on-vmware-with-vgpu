@@ -3,6 +3,9 @@
   hosts: localhost
   gather_facts: no
 
+  roles:
+    - karmab.ansible_aicli_modules
+
   vars:
     equinix_metal_git_repo: https://github.com/empovit/equinix-metal-vsphere
     equinix_metal_git_branch: all-fixes
@@ -14,6 +17,12 @@
     vgpu_profile: "undefined" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
 
   tasks:
+
+    - name: Ansible dependencies
+      ansible.builtin.command: ansible-galaxy install -r requirements.yml
+      register: req_install
+      changed_when: "'Nothing to do' not in req_install.stdout"
+
     - name: Python prerequisites
       ansible.builtin.pip:
         name:
@@ -103,10 +112,14 @@
 
     - name: SNO cluster
       ai_cluster:
-        name: sno_vmware
+        name: sno-vmware
         state: present
         parameters:
           sno: true
+          pull_secret: "{{ pull_secret_path }}"
+          base_dns_domain: "{{ openshift_base_domain }}"
+          # TODO: Add SSH key
+        offlinetoken: "{{ ocm_offline_token }}"
 
     - name: ISO download
       ansible.builtin.shell: echo "ISO download"

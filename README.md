@@ -40,23 +40,23 @@ You can store the files in an AWS S3 bucket, or a locally deployed S3 server (e.
 
 ## Setup
 
-Install the required Ansible modules:
-
-```sh
-ansible-galaxy install -r requirements.yml
-```
-
-Create a YAML file (e.g. _vars.yml_) with the following mandatory parameters:
+* Obtain an OpenShift offline token from https://console.redhat.com/openshift/token
+* Download a pull secret file from https://console.redhat.com/openshift/install/pull-secret.
+* Create a YAML file (e.g. _vars.yml_) with the following mandatory parameters:
 
 ```yaml
-s3_url: https://s3.amazonaws.com # or http://<minio_ip>:9000
-s3_bucket: vgpu-vsphere-files
+s3_url: https://s3.amazonaws.com # or http://<minio_ip>:9000 for Minio
+s3_bucket: <bucket_with_artifacts>
 s3_access_key: <access_key>
 s3_secret_key: <secret_key>
 
 equinix_metal_api_key: <api_key>
 equinix_metal_project_id: <existing_project_id>
 equinix_metal_hostname_prefix: <prefix> # to identify the vSphere deployment in a shared project, e.g. your username
+
+ocm_offline_token: <offline_token>
+pull_secret_path: <path/to/pull_secret>
+openshift_base_domain: <base_dns_domain>
 ```
 
 Other variables that can be changed are declared in the playbooks.
