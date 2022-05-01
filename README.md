@@ -57,6 +57,7 @@ equinix_metal_hostname_prefix: <prefix> # to identify the vSphere deployment in 
 ocm_offline_token: <offline_token>
 pull_secret_path: <path/to/pull_secret>
 openshift_base_domain: <base_dns_domain>
+ssh_key: <path/to/public_ssh_key>
 ```
 
 Other variables that can be changed are declared in the playbooks.
