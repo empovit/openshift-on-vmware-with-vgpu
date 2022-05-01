@@ -23,5 +23,5 @@
       with_items:
         - vsanapiutils.py
         - vsanmgmtObjects.py
-        - NVD-VGPU_510.47.03-1OEM.702.0.0.17630552_19297162.zip
+        - NVD-AIE_510.47.03-1OEM.702.0.0.17630552_19298122.zip
         - VMware-VCSA-all-7.0.3-19234570.iso

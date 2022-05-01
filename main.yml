@@ -1,0 +1,155 @@
+---
+- name: Single-Node OpenShift (SNO) with NVIDIA vGPU on VMware
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    equinix_metal_git_repo: https://github.com/empovit/equinix-metal-vsphere
+    equinix_metal_git_branch: all-fixes
+    equinix_metal_tf_dir: equinix_metal
+    esxi_update_filename: "ESXi-7.0U3d-19482537-standard"
+    vcenter_iso_name: "VMware-VCSA-all-7.0.3-19480866.iso"
+    vcenter_username: "Administrator@vsphere.local"
+    vib_filename: "NVD-AIE_510.47.03-1OEM.702.0.0.17630552_19298122.zip"
+    vgpu_profile: "undefined" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
+
+  tasks:
+    - name: Python prerequisites
+      ansible.builtin.pip:
+        name:
+          - PyVmomi
+          - aicli
+
+    - name: vSphere installation scripts repo
+      ansible.builtin.git:
+        repo: "{{ equinix_metal_git_repo }}"
+        dest: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
+        version: "{{ equinix_metal_git_branch }}"
+        single_branch: yes
+
+    - name: Generate variables
+      ansible.builtin.template:
+        src: templates/terraform.tfvars.j2
+        dest: "{{ equinix_metal_tf_dir }}/terraform.tfvars"
+
+    - name: vSphere on Equinix Metal Terraform state
+      community.general.terraform:
+        project_path: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
+        state: present
+        force_init: true
+      register: vsphere_cluster
+
+    - name: Bastion host in the inventory
+      ansible.builtin.add_host:
+        hostname: bastion
+        ansible_host: "{{ vsphere_cluster.outputs.bastion_host.value }}"
+
+    - name: vCenter connection valiables
+      ansible.builtin.set_fact:
+        vcenter_ip: "{{ vsphere_cluster.outputs.vcenter_ip.value }}"
+        vcenter_username: "{{ vsphere_cluster.outputs.vcenter_username.value }}"
+        vcenter_password: "{{ vsphere_cluster.outputs.vcenter_password.value }}"
+
+    - ansible.builtin.debug:
+        msg:
+          - "Bastion host: {{ hostvars.bastion.ansible_host }}"
+          - "vCenter IP: {{ vcenter_ip }}"
+          - "vCenter username: {{ vcenter_username }}"
+          - "vCenter password: {{ vcenter_password }}"
+
+    - name: Fingerprint on first-time SSH connection
+      connection: local
+      shell: |
+        ssh-keygen -F {{ hostvars.bastion.ansible_host }} ||
+        ssh-keyscan -H {{ hostvars.bastion.ansible_host }} >> ~/.ssh/known_hosts
+      register: known_hosts_update
+      changed_when: "'found' not in known_hosts_update.stdout"
+
+    - name: vGPU VIB from S3 storage
+      ansible.builtin.command: "mc cp s3/{{ s3_bucket }}/{{ vib_filename }} ."
+      args:
+        chdir: bootstrap
+      delegate_to: bastion
+
+    - name: Script for installing vGPU on all remote ESXi hosts
+      ansible.builtin.template:
+        src: templates/install_vgpu.py.j2
+        dest: bootstrap/install_vgpu.py
+        mode: u=xwr,g=r,o=r
+      delegate_to: bastion
+
+    - name: Script for locally installing VIB on an ESXi host
+      ansible.builtin.template:
+        src: templates/install_vib_esxi.sh.j2
+        dest: bootstrap/install_vib_esxi.sh
+        mode: u=xwr,g=r,o=r
+      delegate_to: bastion
+
+    - name: Installing vGPU host driver
+      ansible.builtin.command: "python3 $HOME/bootstrap/install_vgpu.py"
+      args:
+        chdir: bootstrap
+      delegate_to: bastion
+
+    # - name: Host graphics for vGPU setup
+    #   community.vmware.vmware_host_config_manager:
+    # hostname: "{{ vcenter_ip }}"
+    # username: "{{ vcenter_username }}"
+    # password: "{{ vcenter_password }}"
+    #     esxi_hostname: "{{ esxi_hostname }}"
+    #     # the list of advanced options can be found by running `vim-cmd hostsvc/advopt/options` on ESXi host
+    #     options:
+    #         'Config.Hardware.graphics.': false
+
+    - name: SNO cluster
+      ai_cluster:
+        name: sno_vmware
+        state: present
+        parameters:
+          sno: true
+
+    - name: ISO download
+      ansible.builtin.shell: echo "ISO download"
+
+    - name: VMware VM
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
+        validate_certs: no
+        name: sno_vm
+        state: present
+        guest_id: rhel8_64Guest
+        disk:
+          - size_gb: 180
+            type: thin
+            datastore: datastore1
+        networks:
+          - name: VM Public Net 1
+            start_connected: yes
+        cdrom:
+          type: iso
+          iso_path: "[datastore1] livecd.iso"
+        hardware:
+          memory_mb: 32768
+          num_cpus: 8
+          scsi: paravirtual
+          boot_firmware: "efi"
+        advanced_settings:
+          - key: "pciPassthru.use64bitMMIO"
+            value: "TRUE"
+          - key: "pciPassthru.64bitMMIOSizeGB"
+            value: "512"
+        wait_for_ip_address: yes
+      register: vm
+
+    - name: SNO installation
+      ansible.builtin.shell: echo "SNO installation"
+
+    - name: NFD operator installation
+      ansible.builtin.shell: echo "NFD operator"
+
+    - name: GPU operator installation
+      ansible.builtin.shell: echo "GPU operator"

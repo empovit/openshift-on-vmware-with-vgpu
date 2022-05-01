@@ -17,8 +17,8 @@ esxi_hostname = "{{ equinix_metal_hostname_prefix }}-esxi-"
 router_hostname = "{{ equinix_metal_hostname_prefix }}-vsphere-gateway"
 vmware_os = "vmware_esxi_6_5"
 update_esxi = true
-esxi_update_filename = "ESXi-7.0U3d-19482537-standard"
-vcenter_iso_name = "VMware-VCSA-all-7.0.3-19480866.iso"
+esxi_update_filename = "{{ esxi_update_filename }}"
+vcenter_iso_name = "{{ vcenter_iso_name }}"
 vcva_deployment_option = "tiny"
 
 # where to find VMware private artifacts
