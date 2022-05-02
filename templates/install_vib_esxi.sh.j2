@@ -3,7 +3,7 @@
 set -euxo pipefail
 
 # Enable autostart
-vim-cmd hostsvc/autostartmanager/enable_autostart true
+# vim-cmd hostsvc/autostartmanager/enable_autostart true
 
 # Power off all running VMs
 vm_ids=$(vim-cmd vmsvc/getallvms | sed '1d' | awk '{print $1}')
@@ -14,6 +14,7 @@ do
     if [[ "$state" == "Powered on" ]]
     then
         powered_on="$powered_on $vm"
+        vim-cmd hostsvc/autostartmanager/update_autostartentry $vm "powerOn" "0" "1" "systemDefault" "0" "systemDefault"
         vim-cmd vmsvc/power.off $vm
     fi
 done

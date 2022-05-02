@@ -30,7 +30,7 @@ for i in range(len(esx)):
         scp -i "$HOME/.ssh/esxi_key" "$HOME/bootstrap/{{ vib_filename }}" "root@{ip}:/vmfs/volumes/datastore1/{{ vib_filename }}" &&
         scp -i "$HOME/.ssh/esxi_key" "$HOME/bootstrap/install_vib_esxi.sh" "root@{ip}:/vmfs/volumes/datastore1/install_vib_esxi.sh" &&
         ssh -i "$HOME/.ssh/esxi_key" "root@{ip}" "sh -c /vmfs/volumes/datastore1/install_vib_esxi.sh" &&
-        ssh -i "$HOME/.ssh/esxi_key" "root@{ip}" "shutdown --reboot +1m"
+        ssh -i "$HOME/.ssh/esxi_key" "root@{ip}" "reboot -d 60"
     ''') or exit_status
 
 sys.exit(1 if exit_status else 0)

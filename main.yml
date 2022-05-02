@@ -19,7 +19,6 @@
     cluster_name: sno-vmware
 
   tasks:
-
     - name: Python prerequisites
       ansible.builtin.pip:
         name:
@@ -45,16 +44,17 @@
         force_init: true
       register: vsphere_cluster
 
-    - name: Bastion host in the inventory
-      ansible.builtin.add_host:
-        hostname: bastion
-        ansible_host: "{{ vsphere_cluster.outputs.bastion_host.value }}"
-
-    - name: vCenter connection valiables
+    - name: vCenter connection variables
       ansible.builtin.set_fact:
         vcenter_ip: "{{ vsphere_cluster.outputs.vcenter_ip.value }}"
         vcenter_username: "{{ vsphere_cluster.outputs.vcenter_username.value }}"
         vcenter_password: "{{ vsphere_cluster.outputs.vcenter_password.value }}"
+
+    - name: Bastion host in the inventory
+      ansible.builtin.add_host:
+        hostname: bastion
+        ansible_host: "{{ vsphere_cluster.outputs.bastion_host.value }}"
+        ansible_user: root
 
     - ansible.builtin.debug:
         msg:
@@ -97,6 +97,17 @@
         chdir: bootstrap
       delegate_to: bastion
 
+    - name: Waiting for vCenter to become available
+      ansible.builtin.uri:
+        url: "https://{{ vcenter_ip }}/ui/"
+        method: GET
+        validate_certs: no
+      register: _result
+      until: _result.status == 200
+      retries: 20
+      delay: 60
+
+    # See https://github.com/ailaunchpad/ailp-nvidia-ai-enterprise/blob/30ada15b5a0d5e65824a393b2a9eda743da425bb/modules/equinix/metal/vcva/templates/shared_direct.py
     # - name: Host graphics for vGPU setup
     #   community.vmware.vmware_host_config_manager:
     # hostname: "{{ vcenter_ip }}"
@@ -107,7 +118,7 @@
     #     options:
     #         'Config.Hardware.graphics.': false
 
-    - name: SNO cluster
+    - name: SNO cluster creation
       ai_cluster:
         name: "{{ cluster_name }}"
         state: present
@@ -118,14 +129,37 @@
           ssh_public_key: "{{ lookup('file', ssh_key) }}"
         offlinetoken: "{{ ocm_offline_token }}"
 
-    - name: SNO cluster info
-      ai_cluster_info:
+    - name: SNO InfraEnv
+      ai_infraenv:
+        name: "{{ cluster_name }}"
+        state: present
+        parameters:
+          image_type: minimal-iso
+          pull_secret: "{{ pull_secret_path }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+
+    - name: SNO InfraEnv info
+      ai_infraenv_info:
         name: "{{ cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
-      register: sno_cluster
+      register: sno_infraenv
+
+    - debug: var=sno_infraenv.id
 
     - name: ISO download
-      ansible.builtin.shell: echo "ISO download"
+      ansible.builtin.command: "aicli --offlinetoken {{ ocm_offline_token }} download iso {{ sno_infraenv.id }} -p tmp"
+
+    - name: ISO upload to VMware
+      community.vmware.vsphere_copy:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        src: "tmp/{{ sno_infraenv.id }}.iso"
+        datacenter: Metal
+        datastore: datastore1
+        validate_certs: no
+        path: sno-vmware.iso
+        timeout: 1200
 
     - name: VMware VM
       community.vmware.vmware_guest:
@@ -134,7 +168,6 @@
         password: "{{ vcenter_password }}"
         folder: /
         datacenter: Metal
-        validate_certs: no
         name: sno_vm
         state: present
         guest_id: rhel8_64Guest
@@ -147,7 +180,7 @@
             start_connected: yes
         cdrom:
           type: iso
-          iso_path: "[datastore1] livecd.iso"
+          iso_path: "[datastore1] sno-vmware.iso"
         hardware:
           memory_mb: 32768
           num_cpus: 8
@@ -159,6 +192,7 @@
           - key: "pciPassthru.64bitMMIOSizeGB"
             value: "512"
         wait_for_ip_address: yes
+        validate_certs: no
       register: vm
 
     - name: SNO installation
