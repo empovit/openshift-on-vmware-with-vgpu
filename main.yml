@@ -17,12 +17,8 @@
     vgpu_profile: "undefined" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
     ssh_key: "~/.ssh/id_rsa.pub"
     cluster_name: sno-vmware
-  tasks:
 
-    - name: Ansible dependencies
-      ansible.builtin.command: ansible-galaxy install -r requirements.yml
-      register: req_install
-      changed_when: "'Nothing to do' not in req_install.stdout"
+  tasks:
 
     - name: Python prerequisites
       ansible.builtin.pip:

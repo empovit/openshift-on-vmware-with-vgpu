@@ -40,27 +40,35 @@ You can store the files in an AWS S3 bucket, or a locally deployed S3 server (e.
 
 ## Setup
 
-* Obtain an OpenShift offline token from https://console.redhat.com/openshift/token
-* Download a pull secret file from https://console.redhat.com/openshift/install/pull-secret.
-* Create a YAML file (e.g. _vars.yml_) with the following mandatory parameters:
+1. Install the required Ansible dependencies:
 
-```yaml
-s3_url: https://s3.amazonaws.com # or http://<minio_ip>:9000 for Minio
-s3_bucket: <bucket_with_artifacts>
-s3_access_key: <access_key>
-s3_secret_key: <secret_key>
+    ```sh
+    ansible-galaxy install -r requirements.yml
+    ```
 
-equinix_metal_api_key: <api_key>
-equinix_metal_project_id: <existing_project_id>
-equinix_metal_hostname_prefix: <prefix> # to identify the vSphere deployment in a shared project, e.g. your username
+2. Obtain an OpenShift offline token from https://console.redhat.com/openshift/token.
 
-ocm_offline_token: <offline_token>
-pull_secret_path: <path/to/pull_secret>
-openshift_base_domain: <base_dns_domain>
-ssh_key: <path/to/public_ssh_key>
-```
+3. Download a pull secret file from https://console.redhat.com/openshift/install/pull-secret.
 
-Other variables that can be changed are declared in the playbooks.
+4. Create a YAML file (e.g. _vars.yml_) with the following mandatory parameters:
+
+    ```yaml
+    s3_url: https://s3.amazonaws.com # or http://<minio_ip>:9000 for Minio
+    s3_bucket: <bucket_with_artifacts>
+    s3_access_key: <access_key>
+    s3_secret_key: <secret_key>
+
+    equinix_metal_api_key: <api_key>
+    equinix_metal_project_id: <existing_project_id>
+    equinix_metal_hostname_prefix: <prefix> # to identify the vSphere deployment in a shared project, e.g. your username
+
+    ocm_offline_token: <offline_token>
+    pull_secret_path: <path/to/pull_secret>
+    openshift_base_domain: <base_dns_domain>
+    ssh_key: <path/to/public_ssh_key>
+    ```
+
+    Other variables that can be changed are declared in the playbooks.
 
 ## Running
 
