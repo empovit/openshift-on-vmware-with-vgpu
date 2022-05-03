@@ -16,7 +16,7 @@
     vib_filename: "NVD-AIE_510.47.03-1OEM.702.0.0.17630552_19298122.zip"
     vgpu_profile: "undefined" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
     ssh_key: "~/.ssh/id_rsa.pub"
-    cluster_name: sno-vmware
+    cluster_name_prefix: sno-vmware
 
   tasks:
     - name: Python prerequisites
@@ -118,6 +118,13 @@
     #     options:
     #         'Config.Hardware.graphics.': false
 
+    - name: Random cluster name
+      ansible.builtin.set_fact:
+        cluster_name: "{{ cluster_name_prefix }}-{{ lookup('community.general.random_string', upper=False, special=False, length=6) }}"
+
+    - ansible.builtin.debug:
+        msg: "Cluster name: {{ cluster_name }}"
+
     - name: SNO cluster creation
       ai_cluster:
         name: "{{ cluster_name }}"
@@ -129,6 +136,12 @@
           ssh_public_key: "{{ lookup('file', ssh_key) }}"
         offlinetoken: "{{ ocm_offline_token }}"
 
+    - name: SNO cluster
+      ai_cluster_info:
+        name: "{{ cluster_name }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+      register: sno_cluster
+
     - name: SNO InfraEnv
       ai_infraenv:
         name: "{{ cluster_name }}"
@@ -136,6 +149,7 @@
         parameters:
           image_type: minimal-iso
           pull_secret: "{{ pull_secret_path }}"
+          cluster: "{{ sno_cluster.id }}"
         offlinetoken: "{{ ocm_offline_token }}"
 
     - name: SNO InfraEnv info
@@ -144,7 +158,8 @@
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_infraenv
 
-    - debug: var=sno_infraenv.id
+    - ansible.builtin.debug:
+        msg: "InfraEnv: {{ sno_infraenv.id }}"
 
     - name: ISO download
       ansible.builtin.command: "aicli --offlinetoken {{ ocm_offline_token }} download iso {{ sno_infraenv.id }} -p tmp"

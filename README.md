@@ -5,7 +5,7 @@
 * An [Equinix Metal](https://metal.equinix.com/) account for provisioning a bare metal server with a GPU model [supported by NVIDIA vGPU for vSphere 7.0](https://docs.nvidia.com/grid/latest/product-support-matrix/index.html#abstract__vmware-vsphere).
 * An existing Equinix Metal project where you can provision servers.
 * An NVIDIA account with access to the [vGPU packages for vSphere 7.0](https://ui.licensing.nvidia.com/software).
-* A VMware account with access to ESXi and vSphere installation packages, e.g. the [evaluation versions](https://customerconnect.vmware.com/group/vmware/evalcenter).
+* A VMware account with access to ESXi and vSphere installation packages, e.g. the [evaluation versions](https://customerconnect.vmware.com/group/vmware/evalcenter) (make sure you're logged in at [VMware Customer Connect](https://customerconnect.vmware.com/dashboard) before accessing the link).
 * A Red Hat account with access to [assisted installer OpenShift clusters](https://console.redhat.com/openshift/assisted-installer/clusters/~new).
 
 ## Steps
@@ -73,3 +73,42 @@ You can store the files in an AWS S3 bucket, or a locally deployed S3 server (e.
 ## Running
 
 ansible-playbook main.yml -e "@path/to/vars.yml"
+
+Take note of the parameters for connecting to the VMware vSphere cluster, for example:
+
+```json
+{
+    "msg": [
+        "Bastion host: 147.28.143.219",
+        "vCenter IP: 147.28.142.42",
+        "vCenter username: Administrator@vsphere.local",
+        "vCenter password: @akX0S77S4uF2$xu"
+    ]
+}
+```
+
+## Connecting to the Environment
+
+### Router/Bastion
+
+A bastion host IP address will be printed out. You will already have the right SSH key for passwordless access.
+
+`ssh root@<bastion>`
+
+### ESXi hosts
+
+From the bastion host, you can reach the ESXi host (assuming you haven't change the private subnet, which is 172.16.0.0/24):
+
+`ssh -i ~/.ssh/esxi_key root@172.16.0.4`
+
+Useful commands:
+
+* List all VMs: `vim-cmd vmsvc/getallvms`
+* Get the power state of a VM: `vim-cmd vmsvc/power.getstate <vm_id>`
+
+### vCenter
+
+Connect through HTTPS to the vCenter IP address printed out by the Ansible script, accept the self-signed CA certificate.
+Use the vCenter credentials - the username (usually _Administrator@vsphere.local_), and the randomly generated password printed alongside the vCenter IP address.
+
+### OpenShift Cluster
