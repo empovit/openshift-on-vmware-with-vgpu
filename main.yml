@@ -15,8 +15,10 @@
     vcenter_username: "Administrator@vsphere.local"
     vib_filename: "NVD-AIE_510.47.03-1OEM.702.0.0.17630552_19298122.zip"
     vgpu_profile: "undefined" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
-    ssh_key: "~/.ssh/id_rsa.pub"
-    cluster_name_prefix: sno-vmware
+    ssh_public_key: "~/.ssh/id_rsa.pub"
+    cluster_name: sno-vmware
+    install_vgpu_driver: true
+    create_vm: true
 
   tasks:
     - name: Python prerequisites
@@ -65,7 +67,7 @@
 
     - name: Fingerprint on first-time SSH connection
       connection: local
-      shell: |
+      ansible.builtin.shell: |
         ssh-keygen -F {{ hostvars.bastion.ansible_host }} ||
         ssh-keyscan -H {{ hostvars.bastion.ansible_host }} >> ~/.ssh/known_hosts
       register: known_hosts_update
@@ -76,6 +78,7 @@
       args:
         chdir: bootstrap
       delegate_to: bastion
+      when: install_vgpu_driver
 
     - name: Script for installing vGPU on all remote ESXi hosts
       ansible.builtin.template:
@@ -83,6 +86,7 @@
         dest: bootstrap/install_vgpu.py
         mode: u=xwr,g=r,o=r
       delegate_to: bastion
+      when: install_vgpu_driver
 
     - name: Script for locally installing VIB on an ESXi host
       ansible.builtin.template:
@@ -90,12 +94,14 @@
         dest: bootstrap/install_vib_esxi.sh
         mode: u=xwr,g=r,o=r
       delegate_to: bastion
+      when: install_vgpu_driver
 
     - name: Installing vGPU host driver
       ansible.builtin.command: "python3 $HOME/bootstrap/install_vgpu.py"
       args:
         chdir: bootstrap
       delegate_to: bastion
+      when: install_vgpu_driver
 
     - name: Waiting for vCenter to become available
       ansible.builtin.uri:
@@ -118,10 +124,6 @@
     #     options:
     #         'Config.Hardware.graphics.': false
 
-    - name: Random cluster name
-      ansible.builtin.set_fact:
-        cluster_name: "{{ cluster_name_prefix }}-{{ lookup('community.general.random_string', upper=False, special=False, length=6) }}"
-
     - ansible.builtin.debug:
         msg: "Cluster name: {{ cluster_name }}"
 
@@ -131,9 +133,10 @@
         state: present
         parameters:
           sno: true
+          minimal: true
           pull_secret: "{{ pull_secret_path }}"
           base_dns_domain: "{{ openshift_base_domain }}"
-          ssh_public_key: "{{ lookup('file', ssh_key) }}"
+          ssh_public_key: "{{ lookup('file', ssh_public_key) }}"
         offlinetoken: "{{ ocm_offline_token }}"
 
     - name: SNO cluster
@@ -142,16 +145,6 @@
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_cluster
 
-    - name: SNO InfraEnv
-      ai_infraenv:
-        name: "{{ cluster_name }}"
-        state: present
-        parameters:
-          image_type: minimal-iso
-          pull_secret: "{{ pull_secret_path }}"
-          cluster: "{{ sno_cluster.id }}"
-        offlinetoken: "{{ ocm_offline_token }}"
-
     - name: SNO InfraEnv info
       ai_infraenv_info:
         name: "{{ cluster_name }}"
@@ -159,10 +152,13 @@
       register: sno_infraenv
 
     - ansible.builtin.debug:
-        msg: "InfraEnv: {{ sno_infraenv.id }}"
+        msg: 
+        - "Cluster ID: {{ sno_cluster.id }}"
+        - "InfraEnv ID: {{ sno_infraenv.id }}"
 
     - name: ISO download
       ansible.builtin.command: "aicli --offlinetoken {{ ocm_offline_token }} download iso {{ sno_infraenv.id }} -p tmp"
+      when: create_vm
 
     - name: ISO upload to VMware
       community.vmware.vsphere_copy:
@@ -173,8 +169,9 @@
         datacenter: Metal
         datastore: datastore1
         validate_certs: no
-        path: sno-vmware.iso
+        path: "{{ cluster_name }}.iso"
         timeout: 1200
+      when: create_vm
 
     - name: VMware VM
       community.vmware.vmware_guest:
@@ -194,8 +191,11 @@
           - name: VM Public Net 1
             start_connected: yes
         cdrom:
-          type: iso
-          iso_path: "[datastore1] sno-vmware.iso"
+          - controller_number: 0
+            unit_number: 0
+            state: present
+            type: iso
+            iso_path: "[datastore1] {{ cluster_name }}.iso"
         hardware:
           memory_mb: 32768
           num_cpus: 8
@@ -206,9 +206,19 @@
             value: "TRUE"
           - key: "pciPassthru.64bitMMIOSizeGB"
             value: "512"
+        customization:
+          domain: sno
+          hostname: sno
         wait_for_ip_address: yes
         validate_certs: no
       register: vm
+      when: create_vm
+
+    - name: Set hostname
+      ansible.builtin.shell: echo "Set hostname"
+
+    - name: Cluster ready
+      ansible.builtin.shell: echo "Cluster ready"
 
     - name: SNO installation
       ansible.builtin.shell: echo "SNO installation"
