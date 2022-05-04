@@ -73,6 +73,20 @@
       register: known_hosts_update
       changed_when: "'found' not in known_hosts_update.stdout"
 
+    - name: ESXi host addresses script
+      ansible.builtin.copy:
+        src: esxi_hosts.py
+        dest: bootstrap/esxi_hosts.py
+        mode: u=xwr,g=r,o=r
+      delegate_to: bastion
+
+    - name: ISO download script
+      ansible.builtin.copy:
+        src: download_iso.py
+        dest: bootstrap/download_iso.py
+        mode: u=xwr,g=r,o=r
+      delegate_to: bastion
+
     - name: vGPU VIB from S3 storage
       ansible.builtin.command: "mc cp s3/{{ s3_bucket }}/{{ vib_filename }} ."
       args:
@@ -152,25 +166,15 @@
       register: sno_infraenv
 
     - ansible.builtin.debug:
-        msg: 
-        - "Cluster ID: {{ sno_cluster.id }}"
-        - "InfraEnv ID: {{ sno_infraenv.id }}"
+        msg:
+          - "Cluster ID: {{ sno_cluster.id }}"
+          - "InfraEnv ID: {{ sno_infraenv.id }}"
 
     - name: ISO download
-      ansible.builtin.command: "aicli --offlinetoken {{ ocm_offline_token }} download iso {{ sno_infraenv.id }} -p tmp"
-      when: create_vm
-
-    - name: ISO upload to VMware
-      community.vmware.vsphere_copy:
-        hostname: "{{ vcenter_ip }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        src: "tmp/{{ sno_infraenv.id }}.iso"
-        datacenter: Metal
-        datastore: datastore1
-        validate_certs: no
-        path: "{{ cluster_name }}.iso"
-        timeout: 1200
+      ansible.builtin.command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ cluster_name }}.iso"
+      args:
+        chdir: bootstrap
+      delegate_to: bastion
       when: create_vm
 
     - name: VMware VM
