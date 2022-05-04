@@ -127,7 +127,10 @@
       retries: 20
       delay: 60
 
-    # See https://github.com/ailaunchpad/ailp-nvidia-ai-enterprise/blob/30ada15b5a0d5e65824a393b2a9eda743da425bb/modules/equinix/metal/vcva/templates/shared_direct.py
+    # To change host graphics to "Shared Direct" programmatically,
+    # see https://github.com/ailaunchpad/ailp-nvidia-ai-enterprise/blob/30ada15b5a0d5e65824a393b2a9eda743da425bb/modules/equinix/metal/vcva/templates/shared_direct.py
+    # Keep in mind that simply restarting Xorg might not work, and reboot may be required
+
     # - name: Host graphics for vGPU setup
     #   community.vmware.vmware_host_config_manager:
     # hostname: "{{ vcenter_ip }}"
@@ -177,6 +180,8 @@
       delegate_to: bastion
       when: create_vm
 
+    # To add a vGPU as PCI device programmatically, see:
+    # https://github.com/ansible-collections/community.vmware/pull/656
     - name: VMware VM
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_ip }}"
@@ -218,14 +223,36 @@
       register: vm
       when: create_vm
 
-    - name: Set hostname
-      ansible.builtin.shell: echo "Set hostname"
+    - name: Updated cluster info
+      ai_cluster_info:
+        name: "{{ cluster_name }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+      register: sno_cluster
+      until: sno_cluster.hosts|length == 1
+      retries: 10
+      delay: 60
 
-    - name: Cluster ready
-      ansible.builtin.shell: echo "Cluster ready"
+    - name: SNO hostname
+      ai_host:
+        name: "{{ sno_cluster.hosts[0].id }}"
+        state: present
+        parameters:
+          requested_hostname: sno
+        offlinetoken: "{{ ocm_offline_token }}"
+      when: sno_cluster.status == 'pending-for-input'
 
-    - name: SNO installation
-      ansible.builtin.shell: echo "SNO installation"
+    - name: SNO installation started
+      ai_cluster:
+        name: "{{ cluster_name }}"
+        state: started
+        offlinetoken: "{{ ocm_offline_token }}"
+      when: sno_cluster.status != 'installed'
+
+    - name: SNO installation completed
+      ai_cluster:
+        name: "{{ cluster_name }}"
+        state: installed
+        offlinetoken: "{{ ocm_offline_token }}"
 
     - name: NFD operator installation
       ansible.builtin.shell: echo "NFD operator"

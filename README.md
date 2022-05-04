@@ -87,17 +87,24 @@ Take note of the parameters for connecting to the VMware vSphere cluster, for ex
 }
 ```
 
-## Connecting to the Environment
+## Troubleshooting
 
-### Router/Bastion
+### Terraform
 
-A bastion host IP address will be printed out. You will already have the right SSH key for passwordless access.
+If the Terraform task has failed, but you don't have enough information, try to run the Terraform script manually (it's idempotent).
+Change to the _equinix\_metal_ directory, review the generated _terraform.tfvars_ file, then run `terraform apply`.
+
+Review the generated
+
+### Connecting to the Router/Bastion
+
+A bastion host IP address is printed out by Ansible after it becomes available. You will already have the right SSH key for passwordless access.
 
 `ssh root@<bastion>`
 
-### ESXi hosts
+### Connecting to ESXi hosts
 
-From the bastion host, you can reach the ESXi host (assuming you haven't change the private subnet, which is 172.16.0.0/24):
+From the bastion host, you can reach the ESXi host(s). Assuming you haven't change the private subnet, which is 172.16.0.0/24, the IP address of the first (and only for SNO) ESXi host is _172.16.0.4_ (subnet + 3):
 
 `ssh -i ~/.ssh/esxi_key root@172.16.0.4`
 
@@ -106,9 +113,9 @@ Useful commands:
 * List all VMs: `vim-cmd vmsvc/getallvms`
 * Get the power state of a VM: `vim-cmd vmsvc/power.getstate <vm_id>`
 
-### vCenter
+## Connecting to vCenter
 
 Connect through HTTPS to the vCenter IP address printed out by the Ansible script, accept the self-signed CA certificate.
-Use the vCenter credentials - the username (usually _Administrator@vsphere.local_), and the randomly generated password printed alongside the vCenter IP address.
+Use the vCenter credentials &mdash; the username (usually _Administrator@vsphere.local_), and the randomly generated password printed alongside the vCenter IP address.
 
-### OpenShift Cluster
+## Connecting to OpenShift

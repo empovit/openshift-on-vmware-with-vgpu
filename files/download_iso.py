@@ -12,6 +12,9 @@ if __name__ == "__main__":
 
     ip = str(esxi_hosts.ips[0])
     print(f"ESXi host: {ip}")
-    exit_status = os.system(
-        f'ssh -i "$HOME/.ssh/esxi_key" "root@{ip}" "sh -c wget -O /vmfs/volumes/datastore1/{iso_filename} \'{iso_url}\'"')
+    # Download to the bastion first, because downloading directly from the cloud to an ESXi is too slow
+    exit_status = os.system(f'''
+        wget -O "{iso_filename}" \'{iso_url}\' &&
+        scp -i "$HOME/.ssh/esxi_key" "{ iso_filename }" "root@{ip}:/vmfs/volumes/datastore1/{iso_filename}"
+    ''')
     sys.exit(1 if exit_status else 0)
