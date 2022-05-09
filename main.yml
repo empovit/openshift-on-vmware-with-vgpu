@@ -17,42 +17,53 @@
     vgpu_profile: "undefined" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
     ssh_public_key: "~/.ssh/id_rsa.pub"
     cluster_name: sno-vmware
+    openshift_version: "4.10.11"
     install_vgpu_driver: true
     create_vm: true
 
   tasks:
-    - name: Python prerequisites
+
+    - name: Install Python prerequisites
       ansible.builtin.pip:
         name:
           - PyVmomi
           - aicli
+          - openshift>=0.6
+          - PyYAML >= 3.11
+          - kubernetes-validate
 
-    - name: vSphere installation scripts repo
+    - name: Create temp directory
+      ansible.builtin.file:
+        path: tmp
+        state: directory
+
+    - name: Clone vSphere installation scripts
       ansible.builtin.git:
         repo: "{{ equinix_metal_git_repo }}"
         dest: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
         version: "{{ equinix_metal_git_branch }}"
         single_branch: yes
 
-    - name: Generate variables
+    - name: Generate Terraform variables
       ansible.builtin.template:
         src: templates/terraform.tfvars.j2
-        dest: "{{ equinix_metal_tf_dir }}/terraform.tfvars"
+        dest: "tmp/terraform.tfvars"
 
-    - name: vSphere on Equinix Metal Terraform state
+    - name: Install vSphere on Equinix Metal using Terraform
       community.general.terraform:
         project_path: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
+        variables_files: tmp/terraform.tfvars
         state: present
         force_init: true
       register: vsphere_cluster
 
-    - name: vCenter connection variables
+    - name: Set vCenter connection variables
       ansible.builtin.set_fact:
         vcenter_ip: "{{ vsphere_cluster.outputs.vcenter_ip.value }}"
         vcenter_username: "{{ vsphere_cluster.outputs.vcenter_username.value }}"
         vcenter_password: "{{ vsphere_cluster.outputs.vcenter_password.value }}"
 
-    - name: Bastion host in the inventory
+    - name: Add bastion host to the inventory
       ansible.builtin.add_host:
         hostname: bastion
         ansible_host: "{{ vsphere_cluster.outputs.bastion_host.value }}"
@@ -65,7 +76,7 @@
           - "vCenter username: {{ vcenter_username }}"
           - "vCenter password: {{ vcenter_password }}"
 
-    - name: Fingerprint on first-time SSH connection
+    - name: Add bastion's fingerprint on first-time SSH connection
       connection: local
       ansible.builtin.shell: |
         ssh-keygen -F {{ hostvars.bastion.ansible_host }} ||
@@ -73,28 +84,28 @@
       register: known_hosts_update
       changed_when: "'found' not in known_hosts_update.stdout"
 
-    - name: ESXi host addresses script
+    - name: Copy script for collecting ESXi host addresses
       ansible.builtin.copy:
         src: esxi_hosts.py
         dest: bootstrap/esxi_hosts.py
         mode: u=xwr,g=r,o=r
       delegate_to: bastion
 
-    - name: ISO download script
+    - name: Copy script for downloading assisted installer ISO
       ansible.builtin.copy:
         src: download_iso.py
         dest: bootstrap/download_iso.py
         mode: u=xwr,g=r,o=r
       delegate_to: bastion
 
-    - name: vGPU VIB from S3 storage
+    - name: Download vGPU VIB from S3 storage
       ansible.builtin.command: "mc cp s3/{{ s3_bucket }}/{{ vib_filename }} ."
       args:
         chdir: bootstrap
       delegate_to: bastion
       when: install_vgpu_driver
 
-    - name: Script for installing vGPU on all remote ESXi hosts
+    - name: Copy script for installing vGPU on all remote ESXi hosts
       ansible.builtin.template:
         src: templates/install_vgpu.py.j2
         dest: bootstrap/install_vgpu.py
@@ -102,7 +113,7 @@
       delegate_to: bastion
       when: install_vgpu_driver
 
-    - name: Script for locally installing VIB on an ESXi host
+    - name: Copy script for locally installing VIB on an ESXi host
       ansible.builtin.template:
         src: templates/install_vib_esxi.sh.j2
         dest: bootstrap/install_vib_esxi.sh
@@ -110,14 +121,14 @@
       delegate_to: bastion
       when: install_vgpu_driver
 
-    - name: Installing vGPU host driver
+    - name: Install vGPU host driver on all ESXi hosts
       ansible.builtin.command: "python3 $HOME/bootstrap/install_vgpu.py"
       args:
         chdir: bootstrap
       delegate_to: bastion
       when: install_vgpu_driver
 
-    - name: Waiting for vCenter to become available
+    - name: Wait for vCenter to become available
       ansible.builtin.uri:
         url: "https://{{ vcenter_ip }}/ui/"
         method: GET
@@ -141,14 +152,12 @@
     #     options:
     #         'Config.Hardware.graphics.': false
 
-    - ansible.builtin.debug:
-        msg: "Cluster name: {{ cluster_name }}"
-
-    - name: SNO cluster creation
+    - name: Create assisted SNO cluster
       ai_cluster:
         name: "{{ cluster_name }}"
         state: present
         parameters:
+          openshift_version: "{{ openshift_version }}"
           sno: true
           minimal: true
           pull_secret: "{{ pull_secret_path }}"
@@ -156,24 +165,19 @@
           ssh_public_key: "{{ lookup('file', ssh_public_key) }}"
         offlinetoken: "{{ ocm_offline_token }}"
 
-    - name: SNO cluster
+    - name: Read SNO cluster
       ai_cluster_info:
         name: "{{ cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_cluster
 
-    - name: SNO InfraEnv info
+    - name: Read SNO cluster's InfraEnv
       ai_infraenv_info:
         name: "{{ cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_infraenv
 
-    - ansible.builtin.debug:
-        msg:
-          - "Cluster ID: {{ sno_cluster.id }}"
-          - "InfraEnv ID: {{ sno_infraenv.id }}"
-
-    - name: ISO download
+    - name: Download assisted installer ISO for SNO cluster
       ansible.builtin.command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ cluster_name }}.iso"
       args:
         chdir: bootstrap
@@ -223,16 +227,16 @@
       register: vm
       when: create_vm
 
-    - name: Updated cluster info
+    - name: Wait for host(s) in the cluster
       ai_cluster_info:
         name: "{{ cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_cluster
-      until: sno_cluster.hosts|length == 1
+      until: sno_cluster.hosts | length == 1
       retries: 10
       delay: 60
 
-    - name: SNO hostname
+    - name: Set SNO hostname (instead of localhost)
       ai_host:
         name: "{{ sno_cluster.hosts[0].id }}"
         state: present
@@ -241,21 +245,96 @@
         offlinetoken: "{{ ocm_offline_token }}"
       when: sno_cluster.status == 'pending-for-input'
 
-    - name: SNO installation started
+    - name: Start SNO installation
       ai_cluster:
         name: "{{ cluster_name }}"
         state: started
         offlinetoken: "{{ ocm_offline_token }}"
       when: sno_cluster.status != 'installed'
 
-    - name: SNO installation completed
+    - name: Verify SNO installation
       ai_cluster:
         name: "{{ cluster_name }}"
         state: installed
         offlinetoken: "{{ ocm_offline_token }}"
 
-    - name: NFD operator installation
-      ansible.builtin.shell: echo "NFD operator"
+    - name: Set NGC credentials
+      ansible.builtin.set_fact:
+        ngc_credentials: "$oathtoken:{{ ngc_api_key }}"
 
-    - name: GPU operator installation
-      ansible.builtin.shell: echo "GPU operator"
+    - name: Set NGC pull secret auth
+      ansible.builtin.set_fact:
+        ngc_auth: "{\"auths\":{\"nvcr.io/nvaie\":{\"username\":\"$oauthtoken\",\"password\":\"{{ ngc_api_key }}\",\"auth\": \"{{ ngc_credentials | b64encode }}\",\"email\":\"{{ ngc_email }}\"}}}"
+
+    - name: Download cluster's kubeconfig
+      ansible.builtin.command: "aicli --token {{ ocm_offline_token }} download kubeconfig --path tmp/ {{ sno_cluster.id }}"
+
+    - name: Create vGPU config resources
+      kubernetes.core.k8s:
+        host: "https://{{ sno_host }}:6443" # use host in case there's no DNS entry
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        state: present
+        template:
+          - ngc-secret.yaml.j2
+          - licensing-config.yaml.j2
+        validate_certs: false
+        validate:
+          fail_on_error: yes
+
+    - name: Install NFD operator
+      # https://docs.openshift.com/container-platform/4.10/hardware_enablement/psap-node-feature-discovery-operator.html
+      # https://github.com/openshift/cluster-nfd-operator
+      kubernetes.core.k8s:
+        host: "https://{{ sno_host }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        state: present
+        src: nfd-operator.yaml
+        validate_certs: false
+        validate:
+          fail_on_error: yes
+
+    - name: Wait for NFD operator pods to start
+      kubernetes.core.k8s_info:
+        host: "https://{{ sno_host }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        kind: Pod
+        namespace: openshift-nfd
+        wait: true
+        wait_condition:
+          type: Ready
+        validate_certs: false
+      register: nfd_pods
+      until: nfd_pods | length > 0
+
+    - name: Create NFD instance
+      kubernetes.core.k8s:
+        host: "https://{{ sno_host }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ cluster_name }}"
+        state: present
+        src: nfd-instance.yaml
+        validate_certs: false
+        validate:
+          fail_on_error: yes
+
+    - name: Wait for NFD instance pods to start
+      kubernetes.core.k8s_info:
+        host: "https://{{ sno_host }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ cluster_name }}"
+        kind: Pod
+        namespace: openshift-nfd
+        wait: true
+        wait_condition:
+          type: Ready
+        validate_certs: false
+      register: nfd_instance_pods
+      until: nfd_instance_pods | length > nfd_pods | length
+
+    # - name: Install GPU operator
+    #   kubernetes.core.k8s:
+    #     host: "https://{{ sno_host }}:6443"
+    #     kubeconfig: "tmp/kubeconfig.{{ cluster_name }}"
+    #     state: present
+    #     template: gpu-operator.yaml
+    #     validate_certs: false
+    #     validate:
+    #       fail_on_error: yes

@@ -53,19 +53,28 @@ You can store the files in an AWS S3 bucket, or a locally deployed S3 server (e.
 4. Create a YAML file (e.g. _vars.yml_) with the following mandatory parameters:
 
     ```yaml
+    # Object storage
     s3_url: https://s3.amazonaws.com # or http://<minio_ip>:9000 for Minio
     s3_bucket: <bucket_with_artifacts>
     s3_access_key: <access_key>
     s3_secret_key: <secret_key>
 
+    # Equinix Metal
     equinix_metal_api_key: <api_key>
     equinix_metal_project_id: <existing_project_id>
     equinix_metal_hostname_prefix: <prefix> # to identify the vSphere deployment in a shared project, e.g. your username
 
+    # OpenShift
     ocm_offline_token: <offline_token>
     pull_secret_path: <path/to/pull_secret>
     openshift_base_domain: <base_dns_domain>
     ssh_key: <path/to/public_ssh_key>
+
+    # NVIDIA
+    # from https://ngc.nvidia.com/setup/api-key
+    ngc_api_key: <ngc_api_key>
+    ngc_email: <your@email.com>
+    nls_client_token: <nls_client_license_token> # see https://docs.nvidia.com/license-system/latest/pdf/nvidia-license-system-user-guide.pdf
     ```
 
     Other variables that can be changed are declared in the playbooks.
@@ -92,9 +101,7 @@ Take note of the parameters for connecting to the VMware vSphere cluster, for ex
 ### Terraform
 
 If the Terraform task has failed, but you don't have enough information, try to run the Terraform script manually (it's idempotent).
-Change to the _equinix\_metal_ directory, review the generated _terraform.tfvars_ file, then run `terraform apply`.
-
-Review the generated
+Review the generated _tmp/terraform.tfvars_ file, change to the _equinix\_metal_ directory, then run `terraform apply -var-file=../tmp/terraform.tfvars`.
 
 ### Connecting to the Router/Bastion
 
