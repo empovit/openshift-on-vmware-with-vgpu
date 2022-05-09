@@ -266,21 +266,13 @@
       ansible.builtin.set_fact:
         ngc_auth: "{\"auths\":{\"nvcr.io/nvaie\":{\"username\":\"$oauthtoken\",\"password\":\"{{ ngc_api_key }}\",\"auth\": \"{{ ngc_credentials | b64encode }}\",\"email\":\"{{ ngc_email }}\"}}}"
 
-    - name: Download cluster's kubeconfig
+    - name: Download cluster kubeconfig
       ansible.builtin.command: "aicli --token {{ ocm_offline_token }} download kubeconfig --path tmp/ {{ sno_cluster.id }}"
 
-    - name: Create vGPU config resources
-      kubernetes.core.k8s:
-        host: "https://{{ sno_host }}:6443" # use host in case there's no DNS entry
-        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
-        state: present
-        template:
-          - ngc-secret.yaml.j2
-          - licensing-config.yaml.j2
-        validate_certs: false
-        validate:
-          fail_on_error: yes
+    - name: Download cluster password
+      ansible.builtin.command: "aicli --token {{ ocm_offline_token }} download kubeadmin-password --path tmp/ {{ sno_cluster.id }}"
 
+    # use K8s IP address in case there's no DNS entry
     - name: Install NFD operator
       # https://docs.openshift.com/container-platform/4.10/hardware_enablement/psap-node-feature-discovery-operator.html
       # https://github.com/openshift/cluster-nfd-operator
@@ -290,51 +282,54 @@
         state: present
         src: nfd-operator.yaml
         validate_certs: false
-        validate:
-          fail_on_error: yes
 
-    - name: Wait for NFD operator pods to start
+    - name: Wait for NFD operator to start
       kubernetes.core.k8s_info:
         host: "https://{{ sno_host }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
-        kind: Pod
+        kind: Deployment
         namespace: openshift-nfd
         wait: true
         wait_condition:
-          type: Ready
+          type: Available
+          status: "True"
+          reason: MinimumReplicasAvailable
         validate_certs: false
-      register: nfd_pods
-      until: nfd_pods | length > 0
 
     - name: Create NFD instance
       kubernetes.core.k8s:
         host: "https://{{ sno_host }}:6443"
-        kubeconfig: "tmp/kubeconfig.{{ cluster_name }}"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         state: present
         src: nfd-instance.yaml
         validate_certs: false
-        validate:
-          fail_on_error: yes
 
-    - name: Wait for NFD instance pods to start
+    - name: Wait for NFD instance to become available
       kubernetes.core.k8s_info:
         host: "https://{{ sno_host }}:6443"
-        kubeconfig: "tmp/kubeconfig.{{ cluster_name }}"
-        kind: Pod
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        kind: NodeFeatureDiscovery
         namespace: openshift-nfd
         wait: true
         wait_condition:
-          type: Ready
+          type: Available
+          status: "True"
         validate_certs: false
-      register: nfd_instance_pods
-      until: nfd_instance_pods | length > nfd_pods | length
 
     # - name: Install GPU operator
     #   kubernetes.core.k8s:
     #     host: "https://{{ sno_host }}:6443"
-    #     kubeconfig: "tmp/kubeconfig.{{ cluster_name }}"
+    #     kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
     #     state: present
     #     template: gpu-operator.yaml
     #     validate_certs: false
-    #     validate:
-    #       fail_on_error: yes
+
+    # - name: Create vGPU config resources
+    #   kubernetes.core.k8s:
+    #     host: "https://{{ sno_host }}:6443"
+    #     kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+    #     state: present
+    #     template:
+    #       - ngc-secret.yaml.j2
+    #       - licensing-config.yaml.j2
+    #     validate_certs: false
