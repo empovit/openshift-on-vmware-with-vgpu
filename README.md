@@ -126,3 +126,5 @@ Connect through HTTPS to the vCenter IP address printed out by the Ansible scrip
 Use the vCenter credentials &mdash; the username (usually _Administrator@vsphere.local_), and the randomly generated password printed alongside the vCenter IP address.
 
 ## Connecting to OpenShift
+
+A _kubeconfig_ file with the cluster name as the file extension will be created in the _tmp_ directory. For instance, _tmp/kubeconfig.sno-vmware_ (default cluster name). In addition, _tmp/kubeadmin-password.sno-vmware_ will contain the password for accessing cluster console with username _kubeadmin_.
