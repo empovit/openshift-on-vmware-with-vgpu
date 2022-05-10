@@ -30,7 +30,6 @@
           - aicli
           - openshift>=0.6
           - PyYAML >= 3.11
-          - kubernetes-validate
 
     - name: Create temp directory
       ansible.builtin.file:
@@ -316,20 +315,41 @@
           status: "True"
         validate_certs: false
 
-    # - name: Install GPU operator
-    #   kubernetes.core.k8s:
-    #     host: "https://{{ sno_host }}:6443"
-    #     kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
-    #     state: present
-    #     template: gpu-operator.yaml
-    #     validate_certs: false
+    - name: Install GPU operator
+      kubernetes.core.k8s:
+        host: "https://{{ sno_host }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        state: present
+        src: gpu-operator.yaml
+        validate_certs: false
 
-    # - name: Create vGPU config resources
-    #   kubernetes.core.k8s:
-    #     host: "https://{{ sno_host }}:6443"
-    #     kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
-    #     state: present
-    #     template:
-    #       - ngc-secret.yaml.j2
-    #       - licensing-config.yaml.j2
-    #     validate_certs: false
+    - name: Create vGPU config resources
+      kubernetes.core.k8s:
+        host: "https://{{ sno_host }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        state: present
+        template:
+          - ngc-secret.yaml.j2
+          - licensing-config.yaml.j2
+        validate_certs: false
+
+    - name: Wait for GPU operator to start
+      kubernetes.core.k8s_info:
+        host: "https://{{ sno_host }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        kind: Deployment
+        namespace: nvidia-gpu-operator
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+          reason: MinimumReplicasAvailable
+        validate_certs: false
+
+    - name: Deploy GPU cluster policy
+      kubernetes.core.k8s:
+        host: "https://{{ sno_host }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        state: present
+        src: gpu-cluster-policy.yaml
+        validate_certs: false
