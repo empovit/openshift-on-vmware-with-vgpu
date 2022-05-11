@@ -103,6 +103,8 @@ Take note of the parameters for connecting to the VMware vSphere cluster, for ex
 If the Terraform task has failed, but you don't have enough information, try to run the Terraform script manually (it's idempotent).
 Review the generated _tmp/terraform.tfvars_ file, change to the _equinix\_metal_ directory, then run `terraform apply -var-file=../tmp/terraform.tfvars`.
 
+Full Terraform stdout is also dumped into _tmp/terraform.log_.
+
 ### Connecting to the Router/Bastion
 
 A bastion host IP address is printed out by Ansible after it becomes available. You will already have the right SSH key for passwordless access.
@@ -128,3 +130,11 @@ Use the vCenter credentials &mdash; the username (usually _Administrator@vsphere
 ## Connecting to OpenShift
 
 A _kubeconfig_ file with the cluster name as the file extension will be created in the _tmp_ directory. For instance, _tmp/kubeconfig.sno-vmware_ (default cluster name). In addition, _tmp/kubeadmin-password.sno-vmware_ will contain the password for accessing cluster console with username _kubeadmin_.
+
+## Cleanup
+
+In most cases it should be enough to destroy the provisioned Equinix Metal machines:
+
+```sh
+terraform destroy --var-file=../tmp/terraform.tfvars
+```

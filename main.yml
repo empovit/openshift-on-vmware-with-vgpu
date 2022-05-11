@@ -14,22 +14,23 @@
     vcenter_iso_name: "VMware-VCSA-all-7.0.3-19480866.iso"
     vcenter_username: "Administrator@vsphere.local"
     vib_filename: "NVD-AIE_510.47.03-1OEM.702.0.0.17630552_19298122.zip"
-    vgpu_profile: "undefined" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
+    vgpu_profile: "grid_v100dx-1b" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
+    vm_name: sno_vm
     ssh_public_key: "~/.ssh/id_rsa.pub"
     cluster_name: sno-vmware
     openshift_version: "4.10.11"
     install_vgpu_driver: true
-    create_vm: true
 
   tasks:
 
     - name: Install Python prerequisites
       ansible.builtin.pip:
         name:
-          - PyVmomi
-          - aicli
+          - PyVmomi>=7.0.3
+          - aicli>=99.0.202205110654.202103111306
           - openshift>=0.6
           - PyYAML >= 3.11
+        state: present
 
     - name: Create temp directory
       ansible.builtin.file:
@@ -51,10 +52,16 @@
     - name: Install vSphere on Equinix Metal using Terraform
       community.general.terraform:
         project_path: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
-        variables_files: tmp/terraform.tfvars
+        variables_files: "{{ playbook_dir }}/tmp/terraform.tfvars"
         state: present
         force_init: true
       register: vsphere_cluster
+
+    - name: Save Terraform output to a log file
+      ansible.builtin.copy:
+        content: "{{ vsphere_cluster.stdout }}"
+        dest: "tmp/terraform.log"
+        backup: yes
 
     - name: Set vCenter connection variables
       ansible.builtin.set_fact:
@@ -137,19 +144,28 @@
       retries: 20
       delay: 60
 
-    # To change host graphics to "Shared Direct" programmatically,
-    # see https://github.com/ailaunchpad/ailp-nvidia-ai-enterprise/blob/30ada15b5a0d5e65824a393b2a9eda743da425bb/modules/equinix/metal/vcva/templates/shared_direct.py
-    # Keep in mind that simply restarting Xorg might not work, and reboot may be required
+    - name: Change Host graphics to Shared Direct
+      ansible.builtin.command:
+        argv:
+          - "python3"
+          - "update_host_graphics.py"
+          - "--host={{ vcenter_ip }}"
+          - "--user={{ vcenter_username }}"
+          - "--passwd={{ vcenter_password }}"
+          - "--graphics=sharedDirect"
+          - "--ignore-certs"
+      args:
+        chdir: files
 
-    # - name: Host graphics for vGPU setup
-    #   community.vmware.vmware_host_config_manager:
-    # hostname: "{{ vcenter_ip }}"
-    # username: "{{ vcenter_username }}"
-    # password: "{{ vcenter_password }}"
-    #     esxi_hostname: "{{ esxi_hostname }}"
-    #     # the list of advanced options can be found by running `vim-cmd hostsvc/advopt/options` on ESXi host
-    #     options:
-    #         'Config.Hardware.graphics.': false
+     # Simply restarting Xorg might not work, and reboot may be required
+    - name: Restart X.Org Server service for host graphics to take effect
+      community.vmware.vmware_host_service_manager:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        state: restart
+        service_name: xorg
+        validate_certs: no
 
     - name: Create assisted SNO cluster
       ai_cluster:
@@ -176,23 +192,23 @@
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_infraenv
 
+    # TODO: Avoid downloading if the file is busy - used by an existing VM
     - name: Download assisted installer ISO for SNO cluster
       ansible.builtin.command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ cluster_name }}.iso"
       args:
         chdir: bootstrap
       delegate_to: bastion
-      when: create_vm
+      register: copy_result
+      failed_when: "'Device or resource busy' not in copy_result.stderr" # ignore when the file is locked by an existing VM
 
-    # To add a vGPU as PCI device programmatically, see:
-    # https://github.com/ansible-collections/community.vmware/pull/656
-    - name: VMware VM
+    - name: Create a VM for SNO
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_ip }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         folder: /
         datacenter: Metal
-        name: sno_vm
+        name: "{{ vm_name }}"
         state: present
         guest_id: rhel8_64Guest
         disk:
@@ -224,7 +240,40 @@
         wait_for_ip_address: yes
         validate_certs: no
       register: vm
-      when: create_vm
+
+    - name: Power off the VM before adding vGPU
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
+        name: "{{ vm_name }}"
+        state: powered-off
+        validate_certs: no
+
+    - name: Add a vGPU profile to the VM
+      community.vmware.vmware_guest_vgpu:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
+        name: "{{ vm_name }}"
+        state: present
+        vgpu: "{{ vgpu_profile }}"
+        validate_certs: no
+
+    - name: Power on the VM after adding vGPU
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
+        name: "{{ vm_name }}"
+        state: powered-on
+        validate_certs: no
 
     - name: Wait for host(s) in the cluster
       ai_cluster_info:
@@ -238,7 +287,7 @@
     - name: Set SNO hostname (instead of localhost)
       ai_host:
         name: "{{ sno_cluster.hosts[0].id }}"
-        state: present
+        state: updated
         parameters:
           requested_hostname: sno
         offlinetoken: "{{ ocm_offline_token }}"
@@ -271,10 +320,10 @@
     - name: Download cluster password
       ansible.builtin.command: "aicli --token {{ ocm_offline_token }} download kubeadmin-password --path tmp/ {{ sno_cluster.id }}"
 
-    # use K8s IP address in case there's no DNS entry
+    # For all K8s tasks use an IP address to so that they work even if there's no DNS entry.
+    # This requires turning off CA certificate validation (because the certificates use DNS and not IP)
+
     - name: Install NFD operator
-      # https://docs.openshift.com/container-platform/4.10/hardware_enablement/psap-node-feature-discovery-operator.html
-      # https://github.com/openshift/cluster-nfd-operator
       kubernetes.core.k8s:
         host: "https://{{ sno_host }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
