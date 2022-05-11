@@ -133,8 +133,12 @@ A _kubeconfig_ file with the cluster name as the file extension will be created 
 
 ## Cleanup
 
-In most cases it should be enough to destroy the provisioned Equinix Metal machines:
+In most cases it should be enough to:
+
+1. Destroy the provisioned Equinix Metal machines
 
 ```sh
 terraform destroy --var-file=../tmp/terraform.tfvars
 ```
+
+2. Delete the SNO cluster from the [Red Hat Cloud Console](https://console.redhat.com/openshift/assisted-installer/clusters/)
