@@ -287,7 +287,7 @@
     - name: Set SNO hostname (instead of localhost)
       ai_host:
         name: "{{ sno_cluster.hosts[0].id }}"
-        state: updated
+        state: present
         parameters:
           requested_hostname: sno
         offlinetoken: "{{ ocm_offline_token }}"
