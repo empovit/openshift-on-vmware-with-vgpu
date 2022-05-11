@@ -275,7 +275,7 @@
         state: powered-on
         validate_certs: no
 
-    - name: Wait for host(s) in the cluster
+    - name: Wait for exactly one host in the cluster
       ai_cluster_info:
         name: "{{ cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
