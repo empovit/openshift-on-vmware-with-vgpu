@@ -10,6 +10,8 @@
 
 ## Steps
 
+> **WARNING:** Before running the Ansible playbook, make sure you do not have an old cluster named `<cluster_name>` (_sno-vmware_ by default) in the [Assisted Clusters](https://console.redhat.com/openshift/assisted-installer/clusters).
+
 1. Prepare the required artifacts in an AWS S3 compatible storage (e.g. Minio)
 2. Provision a bare metal machine with a compatible NVIDIA GPU.
 3. Install VMware ESXi 7.0 on the bare metal machine.
@@ -103,7 +105,7 @@ Take note of the parameters for connecting to the VMware vSphere cluster, for ex
 If the Terraform task has failed, but you don't have enough information, try to run the Terraform script manually (it's idempotent).
 Review the generated _tmp/terraform.tfvars_ file, change to the _equinix\_metal_ directory, then run `terraform apply -var-file=../tmp/terraform.tfvars`.
 
-Full Terraform stdout is also dumped into _tmp/terraform.log_.
+Full Terraform output is also dumped into _tmp/terraform.stdout.&lt;timestamp&gt;_ and _tmp/terraform.stderr.&lt;timestamp&gt;_.
 
 ### Connecting to the Router/Bastion
 
@@ -130,6 +132,8 @@ Use the vCenter credentials &mdash; the username (usually _Administrator@vsphere
 ## Connecting to OpenShift
 
 A _kubeconfig_ file with the cluster name as the file extension will be created in the _tmp_ directory. For instance, _tmp/kubeconfig.sno-vmware_ (default cluster name). In addition, _tmp/kubeadmin-password.sno-vmware_ will contain the password for accessing cluster console with username _kubeadmin_.
+
+Use `ssh core@<sno_host>` to SSH to the SNO VM.
 
 ## Cleanup
 

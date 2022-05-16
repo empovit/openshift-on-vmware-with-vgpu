@@ -57,10 +57,16 @@
         force_init: true
       register: vsphere_cluster
 
-    - name: Save Terraform output to a log file
+    - name: Save Terraform stdout to a log file
       ansible.builtin.copy:
         content: "{{ vsphere_cluster.stdout }}"
-        dest: "tmp/terraform.log"
+        dest: "tmp/terraform.stdout"
+        backup: yes
+
+    - name: Save Terraform stderr to a log file
+      ansible.builtin.copy:
+        content: "{{ vsphere_cluster.stderr }}"
+        dest: "tmp/terraform.stderr"
         backup: yes
 
     - name: Set vCenter connection variables
@@ -163,6 +169,7 @@
         hostname: "{{ vcenter_ip }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
+        cluster_name: Metal-1
         state: restart
         service_name: xorg
         validate_certs: no
@@ -199,7 +206,7 @@
         chdir: bootstrap
       delegate_to: bastion
       register: copy_result
-      failed_when: "'Device or resource busy' not in copy_result.stderr" # ignore when the file is locked by an existing VM
+      failed_when: "copy_result.rc != 0 and 'Device or resource busy' not in copy_result.stderr" # ignore when the file is locked by an existing VM
 
     - name: Create a VM for SNO
       community.vmware.vmware_guest:
@@ -240,6 +247,9 @@
         wait_for_ip_address: yes
         validate_certs: no
       register: vm
+
+    - ansible.builtin.debug:
+        msg: "SNO host's (VM's) addresses: {{ vm.instance.hw_eth0.ipaddresses }}"
 
     - name: Power off the VM before adding vGPU
       community.vmware.vmware_guest_powerstate:
@@ -291,7 +301,7 @@
         parameters:
           requested_hostname: sno
         offlinetoken: "{{ ocm_offline_token }}"
-      when: sno_cluster.status == 'pending-for-input'
+      when: sno_cluster.status == 'insufficient'
 
     - name: Start SNO installation
       ai_cluster:
