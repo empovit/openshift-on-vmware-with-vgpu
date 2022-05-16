@@ -81,7 +81,8 @@
         ansible_host: "{{ vsphere_cluster.outputs.bastion_host.value }}"
         ansible_user: root
 
-    - ansible.builtin.debug:
+    - name: Print VMware cluster connection parameters
+      ansible.builtin.debug:
         msg:
           - "Bastion host: {{ hostvars.bastion.ansible_host }}"
           - "vCenter IP: {{ vcenter_ip }}"
@@ -147,8 +148,8 @@
         validate_certs: no
       register: _result
       until: _result.status == 200
-      retries: 20
-      delay: 60
+      retries: 10
+      delay: 120
 
     - name: Change Host graphics to Shared Direct
       ansible.builtin.command:
@@ -248,8 +249,10 @@
         validate_certs: no
       register: vm
 
-    - ansible.builtin.debug:
-        msg: "SNO host's (VM's) addresses: {{ vm.instance.hw_eth0.ipaddresses }}"
+    - name: Print SNO host connection parameters
+      ansible.builtin.debug:
+        msg:
+        - "You can connect to SNO host using: ssh core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
 
     - name: Power off the VM before adding vGPU
       community.vmware.vmware_guest_powerstate:
@@ -303,14 +306,7 @@
         offlinetoken: "{{ ocm_offline_token }}"
       when: sno_cluster.status == 'insufficient'
 
-    - name: Start SNO installation
-      ai_cluster:
-        name: "{{ cluster_name }}"
-        state: started
-        offlinetoken: "{{ ocm_offline_token }}"
-      when: sno_cluster.status != 'installed'
-
-    - name: Verify SNO installation
+    - name: Install SNO cluster
       ai_cluster:
         name: "{{ cluster_name }}"
         state: installed
