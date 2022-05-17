@@ -6,10 +6,6 @@
   roles:
     - karmab.ansible_aicli_modules
 
-  vars:
-    equinix_metal_tf_dir: equinix_metal
-    cluster_name: sno-vmware
-
   tasks:
 
     - name: Delete vSphere deployment on Equinix Metal using Terraform

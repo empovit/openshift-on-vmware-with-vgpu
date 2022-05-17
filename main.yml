@@ -7,17 +7,12 @@
     - karmab.ansible_aicli_modules
 
   vars:
-    equinix_metal_git_repo: https://github.com/empovit/equinix-metal-vsphere
-    equinix_metal_git_branch: stable
-    equinix_metal_tf_dir: equinix_metal
     esxi_update_filename: "ESXi-7.0U3d-19482537-standard"
     vcenter_iso_name: "VMware-VCSA-all-7.0.3-19480866.iso"
     vcenter_username: "Administrator@vsphere.local"
     vib_filename: "NVD-AIE_510.47.03-1OEM.702.0.0.17630552_19298122.zip"
     vgpu_profile: "grid_v100dx-1b" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
-    vm_name: sno_vm
     ssh_public_key: "~/.ssh/id_rsa.pub"
-    cluster_name: sno-vmware
     openshift_version: "4.10.11"
     install_vgpu_driver: true
 
@@ -305,8 +300,20 @@
         parameters:
           requested_hostname: sno
         offlinetoken: "{{ ocm_offline_token }}"
+      when: sno_cluster.status != 'installed'
 
-    - name: Wait for the SNO cluster to install
+    # TODO: Improve the ai_cluster role to handle `ready` state
+    - name: Wait for the SNO cluster to become ready
+      ai_cluster_info:
+        name: "{{ cluster_name }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+      register: sno_cluster
+      when: sno_cluster.status != 'installed'
+      until: sno_cluster.status == 'ready'
+      retries: 20
+      delay: 30
+
+    - name: Install the SNO cluster
       ai_cluster:
         name: "{{ cluster_name }}"
         state: installed
@@ -314,7 +321,7 @@
 
     - name: Set NGC credentials
       ansible.builtin.set_fact:
-        ngc_credentials: "$oathtoken:{{ ngc_api_key }}"
+        ngc_credentials: "$oauthtoken:{{ ngc_api_key }}"
 
     - name: Set NGC pull secret auth
       ansible.builtin.set_fact:
