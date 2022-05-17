@@ -146,3 +146,11 @@ terraform destroy --var-file=../tmp/terraform.tfvars
 ```
 
 2. Delete the SNO cluster from the [Red Hat Cloud Console](https://console.redhat.com/openshift/assisted-installer/clusters/)
+
+To clean up automatically, run
+
+```sh
+ansible-playbook destroy.yml -e "@path/to/vars.yml"
+```
+
+Terraform logs will be saved in  _tmp/terraform-destroy.stdout[.timestamp]_ and _tmp/terraform-destroy.stderr[.timestamp]_.

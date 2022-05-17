@@ -249,11 +249,6 @@
         validate_certs: no
       register: vm
 
-    - name: Print SNO host connection parameters
-      ansible.builtin.debug:
-        msg:
-        - "You can connect to SNO host using: ssh core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
-
     - name: Power off the VM before adding vGPU
       community.vmware.vmware_guest_powerstate:
         hostname: "{{ vcenter_ip }}"
@@ -277,6 +272,21 @@
         vgpu: "{{ vgpu_profile }}"
         validate_certs: no
 
+    - name: Print SNO host connection parameters
+      ansible.builtin.debug:
+        msg:
+        - "You can connect to SNO host using: ssh core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
+
+    - name: Wait for exactly one disconnected (down) host in the cluster
+      ai_cluster_info:
+        name: "{{ cluster_name }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+      register: sno_cluster
+      until: sno_cluster.hosts | length == 1 and sno_cluster.hosts[0].status == 'disconnected'
+      when: sno_cluster.status != 'installed'
+      retries: 10
+      delay: 60
+
     - name: Power on the VM after adding vGPU
       community.vmware.vmware_guest_powerstate:
         hostname: "{{ vcenter_ip }}"
@@ -288,15 +298,6 @@
         state: powered-on
         validate_certs: no
 
-    - name: Wait for exactly one host in the cluster
-      ai_cluster_info:
-        name: "{{ cluster_name }}"
-        offlinetoken: "{{ ocm_offline_token }}"
-      register: sno_cluster
-      until: sno_cluster.hosts | length == 1
-      retries: 10
-      delay: 60
-
     - name: Set SNO hostname (instead of localhost)
       ai_host:
         name: "{{ sno_cluster.hosts[0].id }}"
@@ -304,9 +305,8 @@
         parameters:
           requested_hostname: sno
         offlinetoken: "{{ ocm_offline_token }}"
-      when: sno_cluster.status == 'insufficient'
 
-    - name: Install SNO cluster
+    - name: Wait for the SNO cluster to install
       ai_cluster:
         name: "{{ cluster_name }}"
         state: installed
@@ -329,9 +329,15 @@
     # For all K8s tasks use an IP address to so that they work even if there's no DNS entry.
     # This requires turning off CA certificate validation (because the certificates use DNS and not IP)
 
+    - name: Get installed cluster
+      ai_cluster_info:
+        name: "{{ cluster_name }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+      register: sno_cluster
+
     - name: Install NFD operator
       kubernetes.core.k8s:
-        host: "https://{{ sno_host }}:6443"
+        host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         state: present
         src: nfd-operator.yaml
@@ -339,7 +345,7 @@
 
     - name: Wait for NFD operator to start
       kubernetes.core.k8s_info:
-        host: "https://{{ sno_host }}:6443"
+        host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         kind: Deployment
         namespace: openshift-nfd
@@ -352,7 +358,7 @@
 
     - name: Create NFD instance
       kubernetes.core.k8s:
-        host: "https://{{ sno_host }}:6443"
+        host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         state: present
         src: nfd-instance.yaml
@@ -360,7 +366,7 @@
 
     - name: Wait for NFD instance to become available
       kubernetes.core.k8s_info:
-        host: "https://{{ sno_host }}:6443"
+        host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         kind: NodeFeatureDiscovery
         namespace: openshift-nfd
@@ -372,7 +378,7 @@
 
     - name: Install GPU operator
       kubernetes.core.k8s:
-        host: "https://{{ sno_host }}:6443"
+        host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         state: present
         src: gpu-operator.yaml
@@ -380,7 +386,7 @@
 
     - name: Create vGPU config resources
       kubernetes.core.k8s:
-        host: "https://{{ sno_host }}:6443"
+        host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         state: present
         template:
@@ -390,7 +396,7 @@
 
     - name: Wait for GPU operator to start
       kubernetes.core.k8s_info:
-        host: "https://{{ sno_host }}:6443"
+        host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         kind: Deployment
         namespace: nvidia-gpu-operator
@@ -403,7 +409,7 @@
 
     - name: Deploy GPU cluster policy
       kubernetes.core.k8s:
-        host: "https://{{ sno_host }}:6443"
+        host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
         state: present
         src: gpu-cluster-policy.yaml
