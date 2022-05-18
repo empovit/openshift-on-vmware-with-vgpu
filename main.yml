@@ -11,7 +11,7 @@
     vcenter_iso_name: "VMware-VCSA-all-7.0.3-19480866.iso"
     vcenter_username: "Administrator@vsphere.local"
     vib_filename: "NVD-AIE_510.47.03-1OEM.702.0.0.17630552_19298122.zip"
-    vgpu_profile: "grid_v100dx-1b" # For supported profiles run `vim-cmd hostsvc/hostconfig` on ESXi and scroll down to `sharedPassthruGpuTypes`
+    vgpu_profile: "grid_v100dx-32q" # Must be a CUDA-supported vGPU type
     ssh_public_key: "~/.ssh/id_rsa.pub"
     openshift_version: "4.10.11"
     install_vgpu_driver: true
@@ -70,6 +70,14 @@
         vcenter_username: "{{ vsphere_cluster.outputs.vcenter_username.value }}"
         vcenter_password: "{{ vsphere_cluster.outputs.vcenter_password.value }}"
 
+    - name: Save vCenter connection parameters to a file
+      ansible.builtin.copy:
+        dest: tmp/vcenter.txt
+        content: |
+          vCenter IP: {{ vcenter_ip }}
+          vCenter username: {{ vcenter_username }}
+          vCenter password: {{ vcenter_password }}
+
     - name: Add bastion host to the inventory
       ansible.builtin.add_host:
         hostname: bastion
@@ -81,8 +89,7 @@
         msg:
           - "Bastion host: {{ hostvars.bastion.ansible_host }}"
           - "vCenter IP: {{ vcenter_ip }}"
-          - "vCenter username: {{ vcenter_username }}"
-          - "vCenter password: {{ vcenter_password }}"
+          - "vCenter credentials in tmp/vcenter.txt"
 
     - name: Add bastion's fingerprint on first-time SSH connection
       connection: local
@@ -237,9 +244,6 @@
             value: "TRUE"
           - key: "pciPassthru.64bitMMIOSizeGB"
             value: "512"
-        customization:
-          domain: sno
-          hostname: sno
         wait_for_ip_address: yes
         validate_certs: no
       register: vm
@@ -298,7 +302,7 @@
         name: "{{ sno_cluster.hosts[0].id }}"
         state: present
         parameters:
-          requested_hostname: sno
+          requested_hostname: "{{ openshift_node_hostname }}"
         offlinetoken: "{{ ocm_offline_token }}"
       when: sno_cluster.status != 'installed'
 
@@ -421,3 +425,24 @@
         state: present
         src: gpu-cluster-policy.yaml
         validate_certs: false
+
+    - name: Wait for the host to have a vGPU
+      kubernetes.core.k8s_info:
+        host: "https://{{ sno_cluster.api_vip }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        api_version: v1
+        kind: Node
+        validate_certs: false
+      register: k8s_nodes
+      until: k8s_nodes.resources[0].status.capacity['nvidia.com/gpu'] == "1"
+      retries: 15
+      delay: 60
+
+    - name: Print deployment complete warning
+      ansible.builtin.debug:
+        msg:
+        - "Deployment complete!"
+        - "> Update DNS records is needed (e.g. in /etc/hosts or /etc/resolv.conf)"
+        - "> export KUBECONFIG={{ playbook_dir }}/tmp/kubeconfig.{{ sno_cluster.id }}"
+        - "> kubeadmin password in {{ playbook_dir }}/tmp/kubeadmin-password.{{ sno_cluster.id }}"
+        - "> GPU operator pods: oc get pods -n nvidia-gpu-operator"
