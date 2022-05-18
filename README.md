@@ -19,6 +19,9 @@
 7. Add a vGPU device to the OpenShift cluster's workers.
 8. Deploy the NVIDIA GPU Operator on the OpenShift cluster. The cluster must have access to a vGPU.
 
+For manual steps for deploying OpenShift with vGPU on VMware vSphere, refer to the [OpenShift Container Platform on VMware vSphere with NVIDIA vGPUs](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/openshift/nvaie-with-ocp.html#openshift-container-platform-on-vmware-vsphere-with-nvidia-vgpus) guide.
+
+
 ## VMware vSphere 7.0 on Equinix Metal
 
 The Equinix Metal server plan that has a vGPU-compatible GPU is [g2.large.x86](https://metal.equinix.com/developers/docs/hardware/legacy-servers/#g2largex86), but ESXi 7.0 isn't offered for it. The solution is to provision a machine with ESXi 6.5 and then upgrade to ESXi 7.0, as explained in detail in [Using VMware ESXi on Equinix Metal](https://metal.equinix.com/developers/guides/vmware-esxi/) and [Setting up Multi-node vSphere Cluster with VSan Support on Equinix Metal](https://metal.equinix.com/developers/guides/vmware/), respectively.

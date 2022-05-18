@@ -274,7 +274,7 @@
     - name: Print SNO host connection parameters
       ansible.builtin.debug:
         msg:
-        - "You can connect to SNO host using: ssh core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
+        - "You can now SSH to the OpenShift node: ssh core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
 
     - name: Wait for exactly one disconnected (down) host in the cluster
       ai_cluster_info:
@@ -430,19 +430,49 @@
       kubernetes.core.k8s_info:
         host: "https://{{ sno_cluster.api_vip }}:6443"
         kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
-        api_version: v1
         kind: Node
         validate_certs: false
       register: k8s_nodes
-      until: k8s_nodes.resources[0].status.capacity['nvidia.com/gpu'] == "1"
+      until: k8s_nodes.resources[0].status.capacity['nvidia.com/gpu'] == "1" # there are other mays, but align with the NVIDIA guide
       retries: 15
       delay: 60
 
-    - name: Print deployment complete warning
+    - name: Wait for CUDA validator to complete
+      kubernetes.core.k8s_info:
+        host: "https://{{ sno_cluster.api_vip }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        kind: Pod
+        namespace: nvidia-gpu-operator
+        wait: true
+        label_selectors:
+        - app=nvidia-cuda-validator
+        wait_condition:
+          type: Initialized
+          status: True
+        wait_timeout: 300
+        wait_sleep: 30
+        validate_certs: false
+
+    - name: Wait for device plugin validator to complete
+      kubernetes.core.k8s_info:
+        host: "https://{{ sno_cluster.api_vip }}:6443"
+        kubeconfig: "tmp/kubeconfig.{{ sno_cluster.id }}"
+        kind: Pod
+        namespace: nvidia-gpu-operator
+        wait: true
+        label_selectors:
+        - app=nvidia-device-plugin-validator
+        wait_condition:
+          type: Initialized
+          status: True
+        wait_timeout: 300
+        wait_sleep: 30
+        validate_certs: false
+
+    - name: Print deployment complete message
       ansible.builtin.debug:
         msg:
         - "Deployment complete!"
         - "> Update DNS records is needed (e.g. in /etc/hosts or /etc/resolv.conf)"
         - "> export KUBECONFIG={{ playbook_dir }}/tmp/kubeconfig.{{ sno_cluster.id }}"
         - "> kubeadmin password in {{ playbook_dir }}/tmp/kubeadmin-password.{{ sno_cluster.id }}"
-        - "> GPU operator pods: oc get pods -n nvidia-gpu-operator"
