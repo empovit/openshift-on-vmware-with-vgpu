@@ -11,7 +11,7 @@
     vcenter_iso_name: "VMware-VCSA-all-7.0.3-19480866.iso"
     vcenter_username: "Administrator@vsphere.local"
     vib_filename: "NVD-AIE_510.47.03-1OEM.702.0.0.17630552_19298122.zip"
-    vgpu_profile: "grid_v100dx-32q" # Must be a CUDA-supported vGPU type
+    vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
     ssh_public_key: "~/.ssh/id_rsa.pub"
     openshift_version: "4.10.11"
     install_vgpu_driver: true
@@ -433,7 +433,7 @@
         kind: Node
         validate_certs: false
       register: k8s_nodes
-      until: k8s_nodes.resources[0].status.capacity['nvidia.com/gpu'] == "1" # there are other mays, but align with the NVIDIA guide
+      until: k8s_nodes.resources[0].status.capacity.get("nvidia.com/gpu") == "1" # there are other ways, but align with the NVIDIA guide
       retries: 15
       delay: 60
 

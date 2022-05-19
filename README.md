@@ -97,6 +97,8 @@ On Tesla V100 at the time of this writing:
 
 * grid_v100dx-1b
 * grid_v100dx-2b
+* grid_v100dx-1b4
+* grid_v100dx-2b4
 * **grid_v100dx-1q**
 * **grid_v100dx-2q**
 * **grid_v100dx-4q**
@@ -109,12 +111,10 @@ On Tesla V100 at the time of this writing:
 * grid_v100dx-8a
 * grid_v100dx-16a
 * grid_v100dx-32a
-* grid_v100dx-2b4
-* grid_v100dx-1b4
-* **grid_v100dx-32c**
 * **grid_v100dx-4c**
 * **grid_v100dx-8c**
 * **grid_v100dx-16c**
+* **grid_v100dx-32c**
 
 ## Running
 
