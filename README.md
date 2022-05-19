@@ -1,4 +1,6 @@
-# Installing SNO OpenShift on VMware vSphere with vGPU
+# Deploying an OpenShift Cluster with vGPU on VMware vSphere
+
+> **NOTE:** Currently the procedure is for deploying a Single Node OpenShift (SNO). Multi-node OpenShift clusters with vGPU will be addressed later.
 
 ## Requirements
 
