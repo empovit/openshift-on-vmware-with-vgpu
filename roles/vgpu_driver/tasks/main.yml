@@ -1,0 +1,32 @@
+- name: Download vGPU VIB from S3 storage
+  command: "mc cp s3/{{ s3_bucket }}/{{ vib_filename }} ."
+  args:
+    chdir: bootstrap
+
+- name: Copy script for installing vGPU on all remote ESXi hosts
+  template:
+    src: templates/install_vgpu.py.j2
+    dest: bootstrap/install_vgpu.py
+    mode: u=xwr,g=r,o=r
+
+- name: Copy script for locally installing VIB on an ESXi host
+  template:
+    src: templates/install_vib_esxi.sh.j2
+    dest: bootstrap/install_vib_esxi.sh
+    mode: u=xwr,g=r,o=r
+
+- name: Install vGPU host driver on all ESXi hosts
+  command: "python3 $HOME/bootstrap/install_vgpu.py"
+  args:
+    chdir: bootstrap
+
+- name: Wait for vCenter to become available after reboot
+  uri:
+    url: "https://{{ vcenter_ip }}/ui/"
+    method: GET
+    validate_certs: no
+  delegate_to: localhost
+  register: _result
+  until: _result.status == 200
+  retries: 10
+  delay: 120

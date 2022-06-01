@@ -1,0 +1,8 @@
+---
+argument_specs:
+  main:
+    options:
+      vcenter_ip:
+        type: "str"
+        required: true
+        description: "Publicly accessible vCenter IP address or DNS name"

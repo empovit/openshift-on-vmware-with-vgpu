@@ -1,0 +1,5 @@
+- name: Copy script for collecting ESXi host addresses
+  copy:
+    src: esxi_hosts.py
+    dest: bootstrap/esxi_hosts.py
+    mode: u=xwr,g=r,o=r

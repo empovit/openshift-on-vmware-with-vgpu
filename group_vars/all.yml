@@ -1,7 +1,3 @@
 vm_name: sno_vm
 cluster_name: sno-vmware
 openshift_node_hostname: sno
-
-equinix_metal_git_repo: https://github.com/empovit/equinix-metal-vsphere
-equinix_metal_git_branch: stable
-equinix_metal_tf_dir: equinix_metal

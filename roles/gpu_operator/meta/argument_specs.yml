@@ -1,0 +1,12 @@
+---
+argument_specs:
+  main:
+    options:
+      openshift_api_vip:
+        type: "str"
+        required: true
+        description: "Publicly accessible API VIP or DNS name of an OpenShift cluster"
+      kubeconfig:
+        type: "str"
+        required: true
+        description: "Path to a kubeconfig file, including the file name"

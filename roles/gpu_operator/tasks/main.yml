@@ -1,0 +1,141 @@
+- name: Install Python dependencies
+  pip:
+    name:
+      - openshift>=0.6
+      - PyYAML >= 3.11
+    state: present
+
+# For all K8s tasks use an IP address to so that they work even if there's no DNS entry.
+# This requires turning off CA certificate validation (because the certificates use DNS and not IP)
+
+- name: Install NFD operator
+  kubernetes.core.k8s:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    src: nfd-operator.yaml
+    validate_certs: false
+
+- name: Wait for NFD operator to start
+  kubernetes.core.k8s_info:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Deployment
+    namespace: openshift-nfd
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+      reason: MinimumReplicasAvailable
+    validate_certs: false
+
+- name: Create NFD instance
+  kubernetes.core.k8s:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    src: nfd-instance.yaml
+    validate_certs: false
+
+- name: Wait for NFD instance to become available
+  kubernetes.core.k8s_info:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    kind: NodeFeatureDiscovery
+    namespace: openshift-nfd
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    validate_certs: false
+
+- name: Install GPU operator
+  kubernetes.core.k8s:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    src: gpu-operator.yaml
+    validate_certs: false
+
+- name: Set NGC credentials
+  set_fact:
+    ngc_credentials: "$oauthtoken:{{ ngc_api_key }}"
+
+- name: Set NGC pull secret auth
+  set_fact:
+    ngc_auth: "{\"auths\":{\"nvcr.io/nvaie\":{\"username\":\"$oauthtoken\",\"password\":\"{{ ngc_api_key }}\",\"auth\": \"{{ ngc_credentials | b64encode }}\",\"email\":\"{{ ngc_email }}\"}}}"
+
+- name: Create vGPU config resources
+  kubernetes.core.k8s:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    template:
+      - ngc-secret.yaml.j2
+      - licensing-config.yaml.j2
+    validate_certs: false
+
+- name: Wait for GPU operator to start
+  kubernetes.core.k8s_info:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Deployment
+    namespace: nvidia-gpu-operator
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+      reason: MinimumReplicasAvailable
+    validate_certs: false
+
+- name: Deploy GPU cluster policy
+  kubernetes.core.k8s:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    state: present
+    src: gpu-cluster-policy.yaml
+    validate_certs: false
+
+- name: Wait for at least one node to have vGPU
+  kubernetes.core.k8s_info:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Node
+    validate_certs: false
+    label_selectors: nvidia.com/vgpu.present=true
+  register: vgpu_nodes
+  until: vgpu_nodes.resources | length > 0
+  retries: 15
+  delay: 60
+
+- name: Wait for CUDA validator to complete
+  kubernetes.core.k8s_info:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Pod
+    namespace: nvidia-gpu-operator
+    wait: true
+    label_selectors:
+    - app=nvidia-cuda-validator
+    wait_condition:
+      type: Initialized
+      status: True
+    wait_timeout: 300
+    wait_sleep: 30
+    validate_certs: false
+
+- name: Wait for device plugin validator to complete
+  kubernetes.core.k8s_info:
+    host: "https://{{ openshift_api_vip }}:6443"
+    kubeconfig: "{{ kubeconfig }}"
+    kind: Pod
+    namespace: nvidia-gpu-operator
+    wait: true
+    label_selectors:
+    - app=nvidia-device-plugin-validator
+    wait_condition:
+      type: Initialized
+      status: True
+    wait_timeout: 300
+    wait_sleep: 30
+    validate_certs: false

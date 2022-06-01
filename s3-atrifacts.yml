@@ -3,8 +3,10 @@
   hosts: localhost
   tasks:
     - name: Python prerequisites
-      ansible.builtin.pip:
-        name: ['boto3', 'botocore']
+      pip:
+        name:
+        - boto3
+        - botocore
 
     - name: Bucket creation
       amazon.aws.aws_s3:

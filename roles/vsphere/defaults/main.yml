@@ -1,0 +1,6 @@
+equinix_metal_git_repo: https://github.com/empovit/equinix-metal-vsphere
+equinix_metal_git_branch: stable
+equinix_metal_tf_dir: equinix_metal
+
+esxi_update_filename: "ESXi-7.0U3d-19482537-standard"
+vcenter_iso_name: "VMware-VCSA-all-7.0.3-19480866.iso"

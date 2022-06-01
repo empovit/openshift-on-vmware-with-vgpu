@@ -1,0 +1,4 @@
+- name: Create temp directory
+  file:
+    path: "{{ tmp_dir }}"
+    state: directory
