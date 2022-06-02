@@ -1,7 +1,7 @@
 - name: Delete vSphere deployment on Equinix Metal using Terraform
   community.general.terraform:
-    project_path: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
-    variables_files: "{{ playbook_dir }}/tmp/terraform.tfvars"
+    project_path: "{{ tmp_dir }}/{{ equinix_metal_tf_dir }}"
+    variables_files: "{{ tmp_dir }}/terraform.tfvars"
     state: absent
     force_init: true
   register: terraform_out

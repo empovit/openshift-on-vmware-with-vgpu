@@ -2,11 +2,28 @@
 argument_specs:
   main:
     options:
+
       openshift_api_vip:
         type: "str"
         required: true
         description: "Publicly accessible API VIP or DNS name of an OpenShift cluster"
+
       kubeconfig:
         type: "str"
         required: true
         description: "Path to a kubeconfig file, including the file name"
+
+      ngc_api_key:
+        type: "str"
+        required: true
+        description: "NVIDIA NGC catalog API key for pulling GPU operator images"
+
+      ngc_email:
+        type: "str"
+        required: true
+        description: "Email used with NVIDIA NGC catalog"
+
+      nls_client_token:
+        type: "str"
+        required: true
+        description: "NVIDIA license system (NLS) token for vGPU guest driver"

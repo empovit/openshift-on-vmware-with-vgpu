@@ -1,7 +1,7 @@
 - name: Clone vSphere installation scripts
   git:
     repo: "{{ equinix_metal_git_repo }}"
-    dest: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
+    dest: "{{ tmp_dir }}/{{ equinix_metal_tf_dir }}"
     version: "{{ equinix_metal_git_branch }}"
     single_branch: yes
 
@@ -12,7 +12,7 @@
 
 - name: Install vSphere on Equinix Metal using Terraform
   community.general.terraform:
-    project_path: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
+    project_path: "{{ tmp_dir }}/{{ equinix_metal_tf_dir }}"
     variables_files: "{{ tmp_dir }}/terraform.tfvars"
     state: present
     force_init: true

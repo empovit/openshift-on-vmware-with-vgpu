@@ -1,0 +1,63 @@
+---
+argument_specs:
+  main:
+    options:
+      equinix_metal_git_repo:
+        type: "str"
+        required: true
+        description: "Git repository with Terraform scripts for VMware vSphere on Equinix"
+
+      equinix_metal_git_branch:
+        type: "str"
+        required: true
+        description: "Git branch Terraform scripts for VMware vSphere on Equinix"
+
+      equinix_metal_tf_dir:
+        type: "str"
+        required: true
+        description: "Clone directory for Terraform scripts for VMware vSphere on Equinix"
+
+      equinix_metal_api_key:
+        type: "str"
+        required: true
+        description: "Equinix API key"
+
+      equinix_metal_project_id:
+        type: "str"
+        required: true
+        description: "ID of an existing Equinix project with API access"
+
+      equinix_metal_hostname_prefix:
+        type: "str"
+        required: true
+        description: "Hostname prefix to identify a particular vSphere deployment"
+
+      esxi_update_filename:
+        type: "str"
+        required: true
+        description: "ESXi patch filename for upgrading older ESXi versions offered by Equinix"
+
+      s3_url:
+        type: "str"
+        required: true
+        description: "URL of an S3-compatible storage for downloading installation files"
+
+      s3_access_key:
+        type: "str"
+        required: true
+        description: "Access key of an S3-compatible storage for downloading installation files"
+
+      s3_secret_key:
+        type: "str"
+        required: true
+        description: "Secret key of an S3-compatible storage for downloading installation files"
+
+      s3_bucket:
+        type: "str"
+        required: true
+        description: "Bucket in a S3-compatible storage for downloading installation files"
+
+      vcenter_iso_name:
+        type: "str"
+        required: true
+        description: "vCenter ISO image in a S3-compatible storage"

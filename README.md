@@ -142,7 +142,7 @@ Take a note of the parameters for connecting to the VMware vSphere cluster, Open
 ### Terraform
 
 If the Terraform task has failed, but you don't have enough information to understand the problem, try re-running the Terraform script manually (it's idempotent).
-Review the generated _tmp/terraform.tfvars_ file, change to the _equinix\_metal_ directory, then run `terraform apply -var-file=../tmp/terraform.tfvars`.
+Review the generated _tmp/terraform.tfvars_ file, change to the _tmp/equinix\_metal_ directory, then run `terraform apply -var-file=../terraform.tfvars`.
 
 Full Terraform output is also dumped into _tmp/terraform.stdout.[.timestamp]_ and _tmp/terraform.stderr[.timestamp]_.
 

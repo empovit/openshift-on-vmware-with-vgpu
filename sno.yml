@@ -14,7 +14,7 @@
     - role: esxi_connections
     - role: vgpu_driver
       vars:
-        vcenter_ip: "{{ hostvars['localhost'].vcenter_ip }}"
+        vcenter_ip: "{{ hostvars.localhost.vcenter_ip }}"
 
 - hosts: localhost
   gather_facts: no
