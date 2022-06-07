@@ -2,7 +2,6 @@
 argument_specs:
   main:
     options:
-
       openshift_api_vip:
         type: "str"
         required: true
@@ -15,15 +14,23 @@ argument_specs:
 
       ngc_api_key:
         type: "str"
-        required: true
+        required: false
         description: "NVIDIA NGC catalog API key for pulling GPU operator images"
 
       ngc_email:
         type: "str"
-        required: true
+        required: false
         description: "Email used with NVIDIA NGC catalog"
 
       nls_client_token:
         type: "str"
-        required: true
+        required: false
         description: "NVIDIA license system (NLS) token for vGPU guest driver"
+
+      gpu_type:
+        type: "str"
+        description: "GPU type - physical (GPU) or virtual (vGPU)"
+        choices:
+          - gpu
+          - vgpu
+        default: gpu

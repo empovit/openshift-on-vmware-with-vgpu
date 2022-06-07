@@ -215,6 +215,7 @@
       vars:
         openshift_api_vip: "{{ sno_cluster.api_vip }}"
         kubeconfig: "{{ playbook_dir }}/tmp/kubeconfig.{{ sno_cluster.id }}"
+        gpu_type: vgpu
 
     - name: Print deployment complete message
       debug:

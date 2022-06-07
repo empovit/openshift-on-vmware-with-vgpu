@@ -74,6 +74,7 @@
       - ngc-secret.yaml.j2
       - licensing-config.yaml.j2
     validate_certs: false
+  when: "{{ gpu_type }} == 'vgpu'"
 
 - name: Wait for GPU operator to start
   kubernetes.core.k8s_info:
@@ -93,18 +94,18 @@
     host: "https://{{ openshift_api_vip }}:6443"
     kubeconfig: "{{ kubeconfig }}"
     state: present
-    src: gpu-cluster-policy.yaml
+    src: "gpu-cluster-policy-{{ gpu_type }}.yaml"
     validate_certs: false
 
-- name: Wait for at least one node to have vGPU
+- name: Wait for at least one node to have (v)GPU
   kubernetes.core.k8s_info:
     host: "https://{{ openshift_api_vip }}:6443"
     kubeconfig: "{{ kubeconfig }}"
     kind: Node
     validate_certs: false
-    label_selectors: nvidia.com/vgpu.present=true
-  register: vgpu_nodes
-  until: vgpu_nodes.resources | length > 0
+    label_selectors: "nvidia.com/{{ gpu_type }}.present=true"
+  register: gpu_nodes
+  until: gpu_nodes.resources | length > 0
   retries: 15
   delay: 60
 
