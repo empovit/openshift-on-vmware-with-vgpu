@@ -2,6 +2,22 @@
 - name: Single-Node OpenShift (SNO) with NVIDIA vGPU on VMware
   gather_facts: no
   hosts: localhost
+  temp_directory: "{{ playbook_dir }}/tmp"
+
+  roles:
+    - karmab.ansible_aicli_modules
+
+  pre_tasks:
+
+    - name: Install Python prerequisites
+      pip:
+        name: aicli>=99.0.202205110654.202103111306
+        state: present
+
+    - name: Create temp directory
+      file:
+        path: "{{ temp_directory }}"
+        state: directory
 
 - hosts: localhost
   gather_facts: no
@@ -28,12 +44,6 @@
     openshift_version: "4.10.11"
 
   tasks:
-
-    - name: Install Python prerequisites
-      pip:
-        name:
-          - aicli>=99.0.202205110654.202103111306
-        state: present
 
     - name: Copy script for downloading assisted installer ISO
       copy:

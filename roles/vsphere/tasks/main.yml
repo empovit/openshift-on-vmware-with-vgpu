@@ -1,19 +1,19 @@
 - name: Clone vSphere installation scripts
   git:
     repo: "{{ equinix_metal_git_repo }}"
-    dest: "{{ tmp_dir }}/{{ equinix_metal_tf_dir }}"
+    dest: "{{ temp_directory }}/{{ equinix_metal_tf_dir }}"
     version: "{{ equinix_metal_git_branch }}"
     single_branch: yes
 
 - name: Generate Terraform variables
   template:
     src: templates/terraform.tfvars.j2
-    dest: "{{ tmp_dir }}/terraform.tfvars"
+    dest: "{{ temp_directory }}/terraform.tfvars"
 
 - name: Install vSphere on Equinix Metal using Terraform
   community.general.terraform:
-    project_path: "{{ tmp_dir }}/{{ equinix_metal_tf_dir }}"
-    variables_files: "{{ tmp_dir }}/terraform.tfvars"
+    project_path: "{{ temp_directory }}/{{ equinix_metal_tf_dir }}"
+    variables_files: "{{ temp_directory }}/terraform.tfvars"
     state: present
     force_init: true
   register: vsphere_cluster
@@ -21,13 +21,13 @@
 - name: Save Terraform stdout to a log file
   copy:
     content: "{{ vsphere_cluster.stdout }}"
-    dest: "{{ tmp_dir }}/terraform.stdout"
+    dest: "{{ temp_directory }}/terraform.stdout"
     backup: yes
 
 - name: Save Terraform stderr to a log file
   copy:
     content: "{{ vsphere_cluster.stderr }}"
-    dest: "{{ tmp_dir }}/terraform.stderr"
+    dest: "{{ temp_directory }}/terraform.stderr"
     backup: yes
 
 - name: Set vCenter connection variables
@@ -38,7 +38,7 @@
 
 - name: Save vCenter connection parameters to a file
   copy:
-    dest: "{{ tmp_dir }}/vcenter.txt"
+    dest: "{{ temp_directory }}/vcenter.txt"
     content: |
       vCenter IP: {{ vcenter_ip }}
       vCenter username: {{ vcenter_username }}
@@ -63,5 +63,5 @@
     msg:
       - "Bastion host: {{ hostvars.bastion.ansible_host }}"
       - "vCenter IP: {{ vcenter_ip }}"
-      - "vCenter credentials in {{ tmp_dir }}/vcenter.txt"
+      - "vCenter credentials in {{ temp_directory }}/vcenter.txt"
 

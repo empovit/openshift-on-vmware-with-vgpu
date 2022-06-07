@@ -1,7 +1,7 @@
 - name: Delete vSphere deployment on Equinix Metal using Terraform
   community.general.terraform:
-    project_path: "{{ tmp_dir }}/{{ equinix_metal_tf_dir }}"
-    variables_files: "{{ tmp_dir }}/terraform.tfvars"
+    project_path: "{{ temp_directory }}/{{ equinix_metal_tf_dir }}"
+    variables_files: "{{ temp_directory }}/terraform.tfvars"
     state: absent
     force_init: true
   register: terraform_out
@@ -9,11 +9,11 @@
 - name: Save Terraform stdout to a log file
   copy:
     content: "{{ terraform_out.stdout }}"
-    dest: "{{ tmp_dir }}/terraform-destroy.stdout"
+    dest: "{{ temp_directory }}/terraform-destroy.stdout"
     backup: yes
 
 - name: Save Terraform stderr to a log file
   copy:
     content: "{{ terraform_out.stderr }}"
-    dest: "{{ tmp_dir }}/terraform-destroy.stderr"
+    dest: "{{ temp_directory }}/terraform-destroy.stderr"
     backup: yes
