@@ -74,7 +74,7 @@
       - ngc-secret.yaml.j2
       - licensing-config.yaml.j2
     validate_certs: false
-  when: "{{ gpu_type }} == 'vgpu'"
+  when: gpu_type == "vgpu"
 
 - name: Wait for GPU operator to start
   kubernetes.core.k8s_info:
