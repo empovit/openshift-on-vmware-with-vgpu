@@ -60,10 +60,12 @@
 - name: Set NGC credentials
   set_fact:
     ngc_credentials: "$oauthtoken:{{ ngc_api_key }}"
+  when: gpu_type == "vgpu"
 
 - name: Set NGC pull secret auth
   set_fact:
     ngc_auth: "{\"auths\":{\"nvcr.io/nvaie\":{\"username\":\"$oauthtoken\",\"password\":\"{{ ngc_api_key }}\",\"auth\": \"{{ ngc_credentials | b64encode }}\",\"email\":\"{{ ngc_email }}\"}}}"
+  when: gpu_type == "vgpu"
 
 - name: Create vGPU config resources
   kubernetes.core.k8s:
