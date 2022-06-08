@@ -211,7 +211,7 @@
       register: sno_cluster
 
     - include_role:
-        name: gpu_operator
+        name: empovit.gpu_operator
       vars:
         openshift_api_vip: "{{ sno_cluster.api_vip }}"
         kubeconfig: "{{ playbook_dir }}/tmp/kubeconfig.{{ sno_cluster.id }}"
