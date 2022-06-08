@@ -3,3 +3,4 @@
     src: esxi_hosts.py
     dest: bootstrap/esxi_hosts.py
     mode: u=xwr,g=r,o=r
+  delegate_to: bastion

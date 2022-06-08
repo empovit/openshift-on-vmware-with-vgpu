@@ -7,7 +7,4 @@ roles:
 collections:
   - amazon.aws
   - community.general
-  # TODO: Replace with just `community.vmware` once 2.5.0 has been released
-  - name: https://github.com/empovit/community.vmware.git
-    type: git
-    version: 2.5.0-pre
+  - community.vmware

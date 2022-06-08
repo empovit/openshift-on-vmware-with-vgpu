@@ -2,10 +2,12 @@
 - name: Single-Node OpenShift (SNO) with NVIDIA vGPU on VMware
   gather_facts: no
   hosts: localhost
-  temp_directory: "{{ playbook_dir }}/tmp"
 
-  roles:
-    - karmab.ansible_aicli_modules
+  vars:
+    temp_directory: "{{ playbook_dir }}/tmp"
+    vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
+    ssh_public_key: "~/.ssh/id_rsa.pub"
+    openshift_version: "4.10.11"
 
   pre_tasks:
 
@@ -19,29 +21,12 @@
         path: "{{ temp_directory }}"
         state: directory
 
-- hosts: localhost
-  gather_facts: no
   roles:
-    - vsphere
-
-- hosts: bastion
-  gather_facts: no
-  roles:
-    - role: esxi_connections
-    - role: vgpu_driver
-      vars:
-        vcenter_ip: "{{ hostvars.localhost.vcenter_ip }}"
-
-- hosts: localhost
-  gather_facts: no
-  roles:
-    - host_graphics
     - karmab.ansible_aicli_modules
-
-  vars:
-    vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
-    ssh_public_key: "~/.ssh/id_rsa.pub"
-    openshift_version: "4.10.11"
+    - vsphere
+    - esxi_connections
+    - vgpu_driver
+    - host_graphics
 
   tasks:
 
@@ -199,10 +184,10 @@
         offlinetoken: "{{ ocm_offline_token }}"
 
     - name: Download cluster kubeconfig
-      command: "aicli --token {{ ocm_offline_token }} download kubeconfig --path tmp/ {{ sno_cluster.id }}"
+      command: "aicli --token {{ ocm_offline_token }} download kubeconfig --path {{ temp_directory }} {{ sno_cluster.id }}"
 
     - name: Download cluster password
-      command: "aicli --token {{ ocm_offline_token }} download kubeadmin-password --path tmp/ {{ sno_cluster.id }}"
+      command: "aicli --token {{ ocm_offline_token }} download kubeadmin-password --path {{ temp_directory }} {{ sno_cluster.id }}"
 
     - name: Get installed cluster
       ai_cluster_info:
@@ -214,7 +199,7 @@
         name: empovit.gpu_operator
       vars:
         openshift_api_vip: "{{ sno_cluster.api_vip }}"
-        kubeconfig: "{{ playbook_dir }}/tmp/kubeconfig.{{ sno_cluster.id }}"
+        kubeconfig: "{{ temp_directory }}/kubeconfig.{{ sno_cluster.id }}"
         gpu_type: vgpu
 
     - name: Print deployment complete message
@@ -222,5 +207,5 @@
         msg:
         - "Deployment complete!"
         - "> Update DNS records is needed (e.g. in /etc/hosts or /etc/resolv.conf)"
-        - "> export KUBECONFIG={{ playbook_dir }}/tmp/kubeconfig.{{ sno_cluster.id }}"
-        - "> kubeadmin password in {{ playbook_dir }}/tmp/kubeadmin-password.{{ sno_cluster.id }}"
+        - "> export KUBECONFIG={{ temp_directory }}/kubeconfig.{{ sno_cluster.id }}"
+        - "> kubeadmin password in {{ temp_directory }}/kubeadmin-password.{{ sno_cluster.id }}"
