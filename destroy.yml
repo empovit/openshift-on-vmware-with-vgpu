@@ -3,6 +3,9 @@
   hosts: localhost
   gather_facts: no
 
+  vars:
+    temp_directory: "{{ playbook_dir }}/tmp"
+
   roles:
     - karmab.ansible_aicli_modules
 
