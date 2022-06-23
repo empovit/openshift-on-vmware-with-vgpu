@@ -30,13 +30,6 @@
 
   tasks:
 
-    - name: Copy script for downloading assisted installer ISO
-      copy:
-        src: download_iso.py
-        dest: bootstrap/download_iso.py
-        mode: u=xwr,g=r,o=r
-      delegate_to: bastion
-
     - name: Create assisted SNO cluster
       ai_cluster:
         name: "{{ cluster_name }}"
@@ -62,14 +55,21 @@
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_infraenv
 
+    - name: Copy script for downloading assisted installer ISO
+      copy:
+        src: download_iso.py
+        dest: bootstrap/download_iso.py
+        mode: u=xwr,g=r,o=r
+      delegate_to: bastion
+
     # TODO: Avoid downloading if the file is busy - used by an existing VM
     - name: Download assisted installer ISO for SNO cluster
       command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ cluster_name }}.iso"
       args:
         chdir: bootstrap
-      delegate_to: bastion
       register: copy_result
       failed_when: "copy_result.rc != 0 and 'Device or resource busy' not in copy_result.stderr" # ignore when the file is locked by an existing VM
+      delegate_to: bastion
 
     - name: Create a VM for SNO
       community.vmware.vmware_guest:

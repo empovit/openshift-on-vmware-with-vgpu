@@ -43,6 +43,7 @@
       vCenter IP: {{ vcenter_ip }}
       vCenter username: {{ vcenter_username }}
       vCenter password: {{ vcenter_password }}
+    backup: true
 
 - name: Add bastion host to the inventory
   add_host:
