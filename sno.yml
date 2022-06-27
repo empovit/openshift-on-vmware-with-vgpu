@@ -4,7 +4,7 @@
   hosts: localhost
 
   vars:
-    temp_directory: "{{ playbook_dir }}/tmp"
+    temp_directory: "tmp"
     vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
     ssh_public_key: "~/.ssh/id_rsa.pub"
     openshift_version: "4.10.11"
