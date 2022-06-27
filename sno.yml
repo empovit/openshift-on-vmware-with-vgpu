@@ -183,6 +183,10 @@
         state: installed
         offlinetoken: "{{ ocm_offline_token }}"
 
+    - name: Set kubeconfig path
+      set_fact:
+        kubeconfig: "{{ temp_directory }}/kubeconfig.{{ sno_cluster.id }}"
+
     - name: Download cluster kubeconfig
       command: "aicli --token {{ ocm_offline_token }} download kubeconfig --path {{ temp_directory }} {{ sno_cluster.id }}"
 
@@ -199,7 +203,6 @@
         name: empovit.gpu_operator
       vars:
         openshift_api_vip: "{{ sno_cluster.api_vip }}"
-        kubeconfig: "{{ temp_directory }}/kubeconfig.{{ sno_cluster.id }}"
         gpu_type: vgpu
 
     - name: Print deployment complete message
@@ -207,5 +210,5 @@
         msg:
         - "Deployment complete!"
         - "> Update DNS records is needed (e.g. in /etc/hosts or /etc/resolv.conf)"
-        - "> export KUBECONFIG={{ temp_directory }}/kubeconfig.{{ sno_cluster.id }}"
+        - "> export KUBECONFIG={{ kubeconfig }}"
         - "> kubeadmin password in {{ temp_directory }}/kubeadmin-password.{{ sno_cluster.id }}"
