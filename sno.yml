@@ -1,0 +1,174 @@
+---
+- name: Single-Node OpenShift (SNO) with NVIDIA vGPU on VMware
+  gather_facts: no
+  hosts: localhost
+
+  vars:
+    temp_directory: "{{ playbook_dir }}/tmp"
+    vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
+
+  pre_tasks:
+
+    - name: Install Python prerequisites
+      pip:
+        name: aicli
+        state: present
+
+    - name: Create temp directory
+      file:
+        path: "{{ temp_directory }}"
+        state: directory
+
+  roles:
+    - vsphere
+    - esxi_connections
+    - vgpu_driver
+    - host_graphics
+
+  tasks:
+
+    - name: Create an assisted SNO cluster
+      karmab.aicli.ai_cluster:
+        name: "{{ cluster_name }}"
+        state: present
+        parameters:
+          openshift_version: "{{ openshift_version }}"
+          sno: true
+          minimal: true
+          pull_secret: "{{ pull_secret_path }}"
+          base_dns_domain: "{{ openshift_base_domain }}"
+          ssh_public_key: "{{ lookup('file', ssh_public_key) }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+
+    - name: Read SNO cluster's InfraEnv
+      karmab.aicli.ai_infraenv_info:
+        name: "{{ cluster_name }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+      register: sno_infraenv
+
+    - name: Copy script for downloading assisted installer ISO
+      copy:
+        src: download_iso.py
+        dest: bootstrap/download_iso.py
+        mode: u=xwr,g=r,o=r
+      delegate_to: bastion
+
+    # TODO: Avoid downloading if the file is busy - used by an existing VM
+    - name: Download assisted installer ISO for SNO cluster
+      command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ cluster_name }}.iso"
+      args:
+        chdir: bootstrap
+      register: copy_result
+      failed_when: "copy_result.rc != 0 and 'Device or resource busy' not in copy_result.stderr" # ignore when the file is locked by an existing VM
+      delegate_to: bastion
+
+    - name: Create a VM for SNO
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
+        name: "{{ vm_name }}"
+        state: present
+        guest_id: rhel8_64Guest
+        disk:
+          - size_gb: 180
+            type: thin
+            datastore: datastore1
+        networks:
+          - name: VM Public Net 1
+            start_connected: yes
+        cdrom:
+          - controller_number: 0
+            unit_number: 0
+            state: present
+            type: iso
+            iso_path: "[datastore1] {{ cluster_name }}.iso"
+        hardware:
+          memory_mb: 32768
+          num_cpus: 8
+          scsi: paravirtual
+          boot_firmware: "efi"
+        advanced_settings:
+          - key: "pciPassthru.use64bitMMIO"
+            value: "TRUE"
+          - key: "pciPassthru.64bitMMIOSizeGB"
+            value: "512"
+        wait_for_ip_address: yes
+        validate_certs: no
+      register: vm
+
+    - name: Power off the VM before adding vGPU
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
+        name: "{{ vm_name }}"
+        state: powered-off
+        validate_certs: no
+
+    - name: Add a vGPU profile to the VM
+      community.vmware.vmware_guest_vgpu:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
+        name: "{{ vm_name }}"
+        state: present
+        vgpu: "{{ vgpu_profile }}"
+        validate_certs: no
+
+    - name: Print SNO host connection parameters
+      debug:
+        msg:
+        - "You can now SSH to the OpenShift node: ssh core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
+
+    - name: Wait for exactly one disconnected (down) host in the cluster
+      karmab.aicli.ai_cluster_info:
+        name: "{{ cluster_name }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+      register: assisted_cluster
+      until: assisted_cluster.status == 'installed' or (assisted_cluster.hosts | length == 1 and assisted_cluster.hosts[0].status == 'disconnected')
+      retries: 10
+      delay: 60
+
+    - name: Power on the VM after adding vGPU
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_ip }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        folder: /
+        datacenter: Metal
+        name: "{{ vm_name }}"
+        state: powered-on
+        validate_certs: no
+
+    - name: Set hostname (instead of localhost)
+      karmab.aicli.ai_host:
+        name: "{{ assisted_cluster.hosts[0].id }}"
+        state: present
+        parameters:
+          requested_hostname: "{{ openshift_node_hostname }}"
+        offlinetoken: "{{ ocm_offline_token }}"
+      when: assisted_cluster.status != 'installed'
+
+    - name: Install OpenShift cluster
+      include_role:
+        name: empovit.assisted_openshift.cluster_installation
+
+    - name: Update DNS entries
+      include_role:
+        name: empovit.assisted_openshift.etc_hosts
+      vars:
+        api_vip: "{{ assisted_cluster.api_vip }}"
+        ingress_vip: "{{ assisted_cluster.ingress_vip }}"
+
+    - name: Install GPU Operator
+      include_role:
+        name: empovit.gpu_operator
+      vars:
+        openshift_api_vip: "{{ assisted_cluster.api_vip }}"

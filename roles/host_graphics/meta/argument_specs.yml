@@ -1,0 +1,18 @@
+---
+argument_specs:
+  main:
+    options:
+
+      vcenter_ip:
+        type: "str"
+        required: true
+        description: "Publicly accessible vCenter IP address or DNS name"
+
+      vcenter_username:
+        type: "str"
+        required: true
+        description: "vCenter username for API access"
+
+      vcenter_password:
+        type: "str"
+        required: true

@@ -1,0 +1,68 @@
+- name: Clone vSphere installation scripts
+  git:
+    repo: "{{ equinix_metal_git_repo }}"
+    dest: "{{ temp_directory }}/{{ equinix_metal_tf_dir }}"
+    version: "{{ equinix_metal_git_branch }}"
+    single_branch: yes
+
+- name: Generate Terraform variables
+  template:
+    src: templates/terraform.tfvars.j2
+    dest: "{{ temp_directory }}/terraform.tfvars"
+
+- name: Install vSphere on Equinix Metal using Terraform
+  community.general.terraform:
+    project_path: "{{ temp_directory }}/{{ equinix_metal_tf_dir }}"
+    variables_files: "{{ temp_directory }}/terraform.tfvars"
+    state: present
+    force_init: true
+  register: vsphere_cluster
+
+- name: Save Terraform stdout to a log file
+  copy:
+    content: "{{ vsphere_cluster.stdout }}"
+    dest: "{{ temp_directory }}/terraform.stdout"
+    backup: yes
+
+- name: Save Terraform stderr to a log file
+  copy:
+    content: "{{ vsphere_cluster.stderr }}"
+    dest: "{{ temp_directory }}/terraform.stderr"
+    backup: yes
+
+- name: Set vCenter connection variables
+  set_fact:
+    vcenter_ip: "{{ vsphere_cluster.outputs.vcenter_ip.value }}"
+    vcenter_username: "{{ vsphere_cluster.outputs.vcenter_username.value }}"
+    vcenter_password: "{{ vsphere_cluster.outputs.vcenter_password.value }}"
+
+- name: Save vCenter connection parameters to a file
+  copy:
+    dest: "{{ temp_directory }}/vcenter.txt"
+    content: |
+      vCenter IP: {{ vcenter_ip }}
+      vCenter username: {{ vcenter_username }}
+      vCenter password: {{ vcenter_password }}
+    backup: true
+
+- name: Add bastion host to the inventory
+  add_host:
+    hostname: bastion
+    ansible_host: "{{ vsphere_cluster.outputs.bastion_host.value }}"
+    ansible_user: root
+
+- name: Add bastion's fingerprint on first-time SSH connection
+  connection: local
+  shell: |
+    ssh-keygen -F {{ hostvars.bastion.ansible_host }} ||
+    ssh-keyscan -H {{ hostvars.bastion.ansible_host }} >> ~/.ssh/known_hosts
+  register: known_hosts_update
+  changed_when: "'found' not in known_hosts_update.stdout"
+
+- name: Print VMware cluster connection parameters
+  debug:
+    msg:
+      - "Bastion host: {{ hostvars.bastion.ansible_host }}"
+      - "vCenter IP: {{ vcenter_ip }}"
+      - "vCenter credentials in {{ temp_directory }}/vcenter.txt"
+

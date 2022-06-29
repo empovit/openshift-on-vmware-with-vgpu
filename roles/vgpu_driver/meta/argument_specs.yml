@@ -1,0 +1,18 @@
+---
+argument_specs:
+  main:
+    options:
+      vcenter_ip:
+        type: "str"
+        required: true
+        description: "Publicly accessible vCenter IP address or DNS name"
+
+      vib_filename:
+        type: "str"
+        required: true
+        description: "NVIDIA vGPU host driver vSphere Installation Bundle (VIB)"
+
+      s3_bucket:
+        type: "str"
+        required: true
+        description: "Bucket in a S3-compatible storage for downloading the vGPU driver VIB"

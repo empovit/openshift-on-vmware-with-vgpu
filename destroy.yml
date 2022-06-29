@@ -3,33 +3,17 @@
   hosts: localhost
   gather_facts: no
 
-  roles:
-    - karmab.ansible_aicli_modules
+  vars:
+    temp_directory: "{{ playbook_dir }}/tmp"
 
   tasks:
 
-    - name: Delete vSphere deployment on Equinix Metal using Terraform
-      community.general.terraform:
-        project_path: "{{ playbook_dir }}/{{ equinix_metal_tf_dir }}"
-        variables_files: "{{ playbook_dir }}/tmp/terraform.tfvars"
-        state: absent
-        force_init: true
-      register: terraform_out
+    - include_role:
+        name: vsphere
+        tasks_from: destroy
 
-    - name: Save Terraform stdout to a log file
-      ansible.builtin.copy:
-        content: "{{ terraform_out.stdout }}"
-        dest: "tmp/terraform-destroy.stdout"
-        backup: yes
-
-    - name: Save Terraform stderr to a log file
-      ansible.builtin.copy:
-        content: "{{ terraform_out.stderr }}"
-        dest: "tmp/terraform-destroy.stderr"
-        backup: yes
-
-    - name: Delete the assisted SNO cluster
-      ai_cluster:
+    - name: Delete the assisted cluster
+      karmab.aicli.ai_cluster:
         name: "{{ cluster_name }}"
         state: absent
         offlinetoken: "{{ ocm_offline_token }}"

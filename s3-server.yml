@@ -3,9 +3,9 @@
   hosts: s3-server
   tasks:
     - name: Install Podman
-      ansible.builtin.package:
+      package:
         name: podman
-        state: present  
+        state: present
 
     - name: Re-create a Minio container with systemd service file generated in /tmp/
       containers.podman.podman_container:
