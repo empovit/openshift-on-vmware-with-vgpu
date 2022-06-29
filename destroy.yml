@@ -12,9 +12,8 @@
         name: vsphere
         tasks_from: destroy
 
-    - include_role:
-        name: karmab.aicli.ai_cluster
-      vars:
+    - name: Delete the assisted cluster
+      karmab.aicli.ai_cluster:
         name: "{{ cluster_name }}"
         state: absent
         offlinetoken: "{{ ocm_offline_token }}"
