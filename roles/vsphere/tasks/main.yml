@@ -4,6 +4,7 @@
     dest: "{{ temp_directory }}/{{ equinix_metal_tf_dir }}"
     version: "{{ equinix_metal_git_branch }}"
     single_branch: yes
+    depth: 1
 
 - name: Generate Terraform variables
   template:
