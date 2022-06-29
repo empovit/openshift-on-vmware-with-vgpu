@@ -6,14 +6,12 @@
   vars:
     temp_directory: "{{ playbook_dir }}/tmp"
     vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
-    ssh_public_key: "~/.ssh/id_rsa.pub"
-    openshift_version: "4.10.11"
 
   pre_tasks:
 
     - name: Install Python prerequisites
       pip:
-        name: aicli>=99.0.202205110654.202103111306
+        name: aicli
         state: present
 
     - name: Create temp directory
@@ -22,7 +20,6 @@
         state: directory
 
   roles:
-    - karmab.ansible_aicli_modules
     - vsphere
     - esxi_connections
     - vgpu_driver
@@ -30,8 +27,8 @@
 
   tasks:
 
-    - name: Create assisted SNO cluster
-      ai_cluster:
+    - name: Create an assisted SNO cluster
+      karmab.aicli.ai_cluster:
         name: "{{ cluster_name }}"
         state: present
         parameters:
@@ -43,14 +40,8 @@
           ssh_public_key: "{{ lookup('file', ssh_public_key) }}"
         offlinetoken: "{{ ocm_offline_token }}"
 
-    - name: Read SNO cluster
-      ai_cluster_info:
-        name: "{{ cluster_name }}"
-        offlinetoken: "{{ ocm_offline_token }}"
-      register: sno_cluster
-
     - name: Read SNO cluster's InfraEnv
-      ai_infraenv_info:
+      karmab.aicli.ai_infraenv_info:
         name: "{{ cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_infraenv
@@ -137,12 +128,11 @@
         - "You can now SSH to the OpenShift node: ssh core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
 
     - name: Wait for exactly one disconnected (down) host in the cluster
-      ai_cluster_info:
+      karmab.aicli.ai_cluster_info:
         name: "{{ cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
-      register: sno_cluster
-      until: sno_cluster.hosts | length == 1 and sno_cluster.hosts[0].status == 'disconnected'
-      when: sno_cluster.status != 'installed'
+      register: assisted_cluster
+      until: assisted_cluster.status == 'installed' or (assisted_cluster.hosts | length == 1 and assisted_cluster.hosts[0].status == 'disconnected')
       retries: 10
       delay: 60
 
@@ -157,58 +147,28 @@
         state: powered-on
         validate_certs: no
 
-    - name: Set SNO hostname (instead of localhost)
-      ai_host:
-        name: "{{ sno_cluster.hosts[0].id }}"
+    - name: Set hostname (instead of localhost)
+      karmab.aicli.ai_host:
+        name: "{{ assisted_cluster.hosts[0].id }}"
         state: present
         parameters:
           requested_hostname: "{{ openshift_node_hostname }}"
         offlinetoken: "{{ ocm_offline_token }}"
-      when: sno_cluster.status != 'installed'
+      when: assisted_cluster.status != 'installed'
 
-    # TODO: Improve the ai_cluster role to handle `ready` state
-    - name: Wait for the SNO cluster to become ready
-      ai_cluster_info:
-        name: "{{ cluster_name }}"
-        offlinetoken: "{{ ocm_offline_token }}"
-      register: sno_cluster
-      when: sno_cluster.status != 'installed'
-      until: sno_cluster.status == 'ready'
-      retries: 20
-      delay: 30
+    - name: Install OpenShift cluster
+      include_role:
+        name: empovit.assisted_openshift.cluster_installation
 
-    - name: Install the SNO cluster
-      ai_cluster:
-        name: "{{ cluster_name }}"
-        state: installed
-        offlinetoken: "{{ ocm_offline_token }}"
+    - name: Update DNS entries
+      include_role:
+        name: empovit.assisted_openshift.etc_hosts
+      vars:
+        api_vip: "{{ assisted_cluster.api_vip }}"
+        ingress_vip: "{{ assisted_cluster.ingress_vip }}"
 
-    - name: Set kubeconfig path
-      set_fact:
-        kubeconfig: "{{ temp_directory }}/kubeconfig.{{ sno_cluster.id }}"
-
-    - name: Download cluster kubeconfig
-      command: "aicli --token {{ ocm_offline_token }} download kubeconfig --path {{ temp_directory }} {{ sno_cluster.id }}"
-
-    - name: Download cluster password
-      command: "aicli --token {{ ocm_offline_token }} download kubeadmin-password --path {{ temp_directory }} {{ sno_cluster.id }}"
-
-    - name: Get installed cluster
-      ai_cluster_info:
-        name: "{{ cluster_name }}"
-        offlinetoken: "{{ ocm_offline_token }}"
-      register: sno_cluster
-
-    - include_role:
+    - name: Install GPU Operator
+      include_role:
         name: empovit.gpu_operator
       vars:
-        openshift_api_vip: "{{ sno_cluster.api_vip }}"
-        gpu_type: vgpu
-
-    - name: Print deployment complete message
-      debug:
-        msg:
-        - "Deployment complete!"
-        - "> Update DNS records is needed (e.g. in /etc/hosts or /etc/resolv.conf)"
-        - "> export KUBECONFIG={{ kubeconfig }}"
-        - "> kubeadmin password in {{ temp_directory }}/kubeadmin-password.{{ sno_cluster.id }}"
+        openshift_api_vip: "{{ assisted_cluster.api_vip }}"
