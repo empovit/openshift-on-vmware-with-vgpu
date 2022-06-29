@@ -6,17 +6,15 @@
   vars:
     temp_directory: "{{ playbook_dir }}/tmp"
 
-  roles:
-    - karmab.ansible_aicli_modules
-
   tasks:
 
     - include_role:
         name: vsphere
         tasks_from: destroy
 
-    - name: Delete the assisted SNO cluster
-      ai_cluster:
+    - include_role:
+        name: karmab.aicli.ai_cluster
+      vars:
         name: "{{ cluster_name }}"
         state: absent
         offlinetoken: "{{ ocm_offline_token }}"
