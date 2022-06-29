@@ -11,7 +11,7 @@ project_id = "{{ equinix_metal_project_id }}"
 
 # single-node deployment
 metro = "da"
-esxi_size = "g2.large.x86"
+esxi_size = "{{ esxi_machine_size }}"
 esxi_host_count = 1
 esxi_hostname = "{{ equinix_metal_hostname_prefix }}-esxi-"
 router_hostname = "{{ equinix_metal_hostname_prefix }}-vsphere-gateway"
