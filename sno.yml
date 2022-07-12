@@ -172,3 +172,4 @@
         name: empovit.gpu_operator
       vars:
         openshift_api_vip: "{{ assisted_cluster.api_vip }}"
+        gpu_type: vgpu
