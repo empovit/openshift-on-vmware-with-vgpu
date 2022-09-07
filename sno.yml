@@ -38,6 +38,7 @@
           pull_secret: "{{ pull_secret_path }}"
           base_dns_domain: "{{ openshift_base_domain }}"
           ssh_public_key: "{{ lookup('file', ssh_public_key) }}"
+          tags: "{{ cluster_tags }}"
         offlinetoken: "{{ ocm_offline_token }}"
 
     - name: Read SNO cluster's InfraEnv
