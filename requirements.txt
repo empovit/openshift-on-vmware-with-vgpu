@@ -1,0 +1,2 @@
+aicli>=99.0.202209051321.202103111306
+assisted-service-client>=2.9.0.post12

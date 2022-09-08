@@ -11,7 +11,7 @@
 
     - name: Install Python prerequisites
       pip:
-        name: aicli
+        requirements: "{{ playbook_dir }}/requirements.txt"
         state: present
 
     - name: Create temp directory
