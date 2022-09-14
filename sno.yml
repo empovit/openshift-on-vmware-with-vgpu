@@ -29,7 +29,7 @@
 
     - name: Create an assisted SNO cluster
       karmab.aicli.ai_cluster:
-        name: "{{ cluster_name }}"
+        name: "{{ openshift_cluster_name }}"
         state: present
         parameters:
           openshift_version: "{{ openshift_version }}"
@@ -43,7 +43,7 @@
 
     - name: Read SNO cluster's InfraEnv
       karmab.aicli.ai_infraenv_info:
-        name: "{{ cluster_name }}"
+        name: "{{ openshift_cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
       register: sno_infraenv
 
@@ -56,7 +56,7 @@
 
     # TODO: Avoid downloading if the file is busy - used by an existing VM
     - name: Download assisted installer ISO for SNO cluster
-      command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ cluster_name }}.iso"
+      command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ openshift_cluster_name }}.iso"
       args:
         chdir: bootstrap
       register: copy_result
@@ -85,7 +85,7 @@
             unit_number: 0
             state: present
             type: iso
-            iso_path: "[datastore1] {{ cluster_name }}.iso"
+            iso_path: "[datastore1] {{ openshift_cluster_name }}.iso"
         hardware:
           memory_mb: 32768
           num_cpus: 8
@@ -130,7 +130,7 @@
 
     - name: Wait for exactly one disconnected (down) host in the cluster
       karmab.aicli.ai_cluster_info:
-        name: "{{ cluster_name }}"
+        name: "{{ openshift_cluster_name }}"
         offlinetoken: "{{ ocm_offline_token }}"
       register: assisted_cluster
       until: assisted_cluster.status == 'installed' or (assisted_cluster.hosts | length == 1 and assisted_cluster.hosts[0].status == 'disconnected')

@@ -14,6 +14,6 @@
 
     - name: Delete the assisted cluster
       karmab.aicli.ai_cluster:
-        name: "{{ cluster_name }}"
+        name: "{{ openshift_cluster_name }}"
         state: absent
         offlinetoken: "{{ ocm_offline_token }}"
