@@ -11,7 +11,7 @@
 
     - name: Install Python prerequisites
       pip:
-        requirements: "{{ playbook_dir }}/requirements.txt"
+        requirements: "{{ playbook_dir }}/files/requirements.txt"
         state: present
 
     - name: Create temp directory
