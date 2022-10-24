@@ -160,6 +160,8 @@
     - name: Install OpenShift cluster
       include_role:
         name: empovit.assisted_openshift.cluster_installation
+      vars:
+        cluster_name: "{{ openshift_cluster_name }}"
 
     - name: Update DNS entries
       include_role:
@@ -167,6 +169,7 @@
       vars:
         api_vip: "{{ assisted_cluster.api_vip }}"
         ingress_vip: "{{ assisted_cluster.ingress_vip }}"
+        cluster_name: "{{ openshift_cluster_name }}"
 
     - name: Install GPU Operator
       include_role:
