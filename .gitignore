@@ -2,5 +2,5 @@
 *.zip
 *.iso
 *.vib
-tmp/
+tmp*/
 equinix_metal

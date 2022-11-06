@@ -1,4 +1,2 @@
-vm_name: sno_vm
+vm_name: "{{ openshift_cluster_name }}"
 cluster_tags: vgpu,vmware,vgpu_on_vmware
-openshift_cluster_name: sno-vmware
-openshift_node_hostname: sno

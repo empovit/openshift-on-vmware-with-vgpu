@@ -1,0 +1,76 @@
+auth_token = "{{ equinix_metal_api_key }}"
+
+# use an existing Equinix Metal project
+create_project = false
+
+# used in name of a generated SSH key
+project_name = "equinix-vmware-vsphere-7"
+
+# existing project when create_project is false
+project_id = "{{ equinix_metal_project_id }}"
+
+# single-node deployment
+metro = "da"
+esxi_size = "{{ esxi_machine_size }}"
+esxi_host_count = 1
+esxi_hostname = "{{ equinix_metal_hostname_prefix }}-esxi-"
+router_hostname = "{{ equinix_metal_hostname_prefix }}-vsphere-gateway"
+vmware_os = "vmware_esxi_6_5"
+update_esxi = true
+esxi_update_filename = "{{ esxi_update_filename }}"
+vcenter_iso_name = "{{ vcenter_iso_name }}"
+vcva_deployment_option = "tiny"
+
+# where to find VMware private artifacts
+s3_url = "{{ s3_url }}"
+s3_access_key = "{{ s3_access_key }}"
+s3_secret_key = "{{ s3_secret_key }}"
+object_store_bucket_name = "{{ s3_bucket }}"
+
+
+# Use a private network for VMs
+# 1. No public networks
+# 2. A private network for the vCenter appliance, referenced in `vcenter_portgroup_name`
+# 3. A private network for custom VMs, i.e. OpenShift nodes
+
+public_subnets = []
+
+private_subnets = [
+    {
+      "name" : "ESXi Private Net",
+      "nat" : true,
+      "vsphere_service_type" : "management",
+      "routable" : true,
+      "cidr" : "172.16.0.0/24"
+    },
+    {
+      "name" : "vMotion",
+      "nat" : false,
+      "vsphere_service_type" : "vmotion",
+      "routable" : false,
+      "cidr" : "172.16.1.0/24"
+    },
+    {
+      "name" : "vSAN",
+      "nat" : false,
+      "vsphere_service_type" : "vsan",
+      "routable" : false,
+      "cidr" : "172.16.2.0/24"
+    },
+    {
+      "name" : "vCenter Private Net",
+      "nat" : true,
+      "vsphere_service_type" : null,
+      "routable" : true,
+      "cidr" : "172.16.3.0/24"
+    },
+    {
+      "name" : "VM Private Net",
+      "nat" : true,
+      "vsphere_service_type" : null,
+      "routable" : true,
+      "cidr" : "172.16.4.0/24"
+    }
+  ]
+
+vcenter_portgroup_name = "vCenter Private Net"

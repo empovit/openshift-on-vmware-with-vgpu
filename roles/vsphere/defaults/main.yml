@@ -5,3 +5,5 @@ equinix_metal_tf_dir: equinix_metal
 esxi_machine_size: g2.large.x86
 esxi_update_filename: "ESXi-7.0U3f-20036589-standard"
 vcenter_iso_name: "VMware-VCSA-all-7.0.3-20150588.iso"
+
+use_private_networks: false

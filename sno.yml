@@ -1,31 +1,72 @@
 ---
 - name: Single-Node OpenShift (SNO) with NVIDIA vGPU on VMware
-  gather_facts: no
   hosts: localhost
-
-  vars:
-    temp_directory: "{{ playbook_dir }}/tmp"
-    vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
+  gather_facts: false
 
   pre_tasks:
 
-    - name: Install Python prerequisites
-      pip:
-        requirements: "{{ playbook_dir }}/files/requirements.txt"
-        state: present
-
-    - name: Create temp directory
-      file:
-        path: "{{ temp_directory }}"
+    - name: Ensure local temp directory '{{ local_temp_dir }}' exists
+      ansible.builtin.file:
+        path: "{{ local_temp_dir }}"
         state: directory
 
   roles:
-    - vsphere
-    - esxi_connections
-    - vgpu_driver
-    - host_graphics
+    - name: vsphere
+      vars:
+        use_private_networks: "{{ use_private_networks }}"
+        temp_directory: "{{ local_temp_dir }}"
+
+- hosts: "{{ 'bastion' if use_private_networks | bool else 'localhost' }}"
+  gather_facts: false
+
+  vars:
+    private_networks: "{{ use_private_networks | bool }}"
+    remote_temp_dir: "{{ '/root/openshift-cluster' if private_networks else local_temp_dir }}"
+    vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
+    oc_client_binary: https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz
+    vcenter_ip: "{{ hostvars.localhost.vcenter_ip }}"
+    vcenter_username: "{{ hostvars.localhost.vcenter_username }}"
+    vcenter_password: "{{ hostvars.localhost.vcenter_password }}"
+
+  pre_tasks:
+
+    - name: Ensure remote temp directory '{{ remote_temp_dir }}' exists
+      ansible.builtin.file:
+        path: "{{ remote_temp_dir }}"
+        state: directory
+      when: private_networks
 
   tasks:
+
+    # Some tasks must always run on the bastion
+
+    - ansible.builtin.include_role:
+        name: esxi_connections
+        apply:
+          delegate_to: bastion
+
+    - ansible.builtin.include_role:
+        name: vgpu_driver
+        apply:
+          delegate_to: bastion
+
+    - ansible.builtin.include_role:
+        name: host_graphics
+        apply:
+          delegate_to: bastion
+
+    - name: Install Python prerequisites
+      ansible.builtin.pip:
+        name:
+        - aicli>=99.0.202210301623.202103111306
+        - assisted-service-client>=2.9.0.post12
+        state: present
+
+    - name: Generate a cluster SSH key pair
+      ansible.builtin.openssh_keypair:
+        path: "{{ remote_temp_dir }}/{{openshift_cluster_name}}_ssh_rsa"
+        size: 2048
+      register: ssh_key_pair
 
     - name: Create an assisted SNO cluster
       karmab.aicli.ai_cluster:
@@ -35,9 +76,9 @@
           openshift_version: "{{ openshift_version }}"
           sno: true
           minimal: true
-          pull_secret: "{{ pull_secret_path }}"
+          pull_secret: "{{ lookup('file', pull_secret_path) | string }}"
           base_dns_domain: "{{ openshift_base_domain }}"
-          ssh_public_key: "{{ lookup('file', ssh_public_key) }}"
+          ssh_public_key: "{{ ssh_key_pair.public_key }}"
           tags: "{{ cluster_tags }}"
         offlinetoken: "{{ ocm_offline_token }}"
 
@@ -48,7 +89,7 @@
       register: sno_infraenv
 
     - name: Copy script for downloading assisted installer ISO
-      copy:
+      ansible.builtin.copy:
         src: download_iso.py
         dest: bootstrap/download_iso.py
         mode: u=xwr,g=r,o=r
@@ -56,7 +97,7 @@
 
     # TODO: Avoid downloading if the file is busy - used by an existing VM
     - name: Download assisted installer ISO for SNO cluster
-      command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ openshift_cluster_name }}.iso"
+      ansible.builtin.command: "python3 $HOME/bootstrap/download_iso.py {{ sno_infraenv.download_url }} {{ openshift_cluster_name }}.iso"
       args:
         chdir: bootstrap
       register: copy_result
@@ -78,7 +119,7 @@
             type: thin
             datastore: datastore1
         networks:
-          - name: VM Public Net 1
+          - name: "{{ 'VM Private Net' if private_networks else 'VM Public Net 1' }}"
             start_connected: yes
         cdrom:
           - controller_number: 0
@@ -124,9 +165,9 @@
         validate_certs: no
 
     - name: Print SNO host connection parameters
-      debug:
+      ansible.builtin.debug:
         msg:
-        - "You can now SSH to the OpenShift node: ssh core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
+        - "You can now SSH to the OpenShift node: ssh -i {{ ssh_key_pair.filename }} core@{{ vm.instance.hw_eth0.ipaddresses[0] }}"
 
     - name: Wait for exactly one disconnected (down) host in the cluster
       karmab.aicli.ai_cluster_info:
@@ -158,21 +199,34 @@
       when: assisted_cluster.status != 'installed'
 
     - name: Install OpenShift cluster
-      include_role:
+      ansible.builtin.include_role:
         name: empovit.assisted_openshift.cluster_installation
       vars:
         cluster_name: "{{ openshift_cluster_name }}"
+        temp_directory: "{{ remote_temp_dir }}"
 
     - name: Update DNS entries
-      include_role:
+      ansible.builtin.include_role:
         name: empovit.assisted_openshift.etc_hosts
       vars:
         api_vip: "{{ assisted_cluster.api_vip }}"
         ingress_vip: "{{ assisted_cluster.ingress_vip }}"
         cluster_name: "{{ openshift_cluster_name }}"
 
+    # conflicts with pip-installed PyYAML
+    - name: Uninstall PyYAML installed by distutils
+      ansible.builtin.package:
+        name: python3-yaml
+        use: apt
+        state: absent
+      when: private_networks
+
+    - name: Install oc binary on the bastion
+      ansible.builtin.shell: "curl -L -o - {{ oc_client_binary }} | tar -C /usr/local/bin -xvzf - oc"
+      when: private_networks
+
     - name: Install GPU Operator
-      include_role:
+      ansible.builtin.include_role:
         name: empovit.gpu_operator
       vars:
         openshift_api_vip: "{{ assisted_cluster.api_vip }}"

@@ -1,31 +1,27 @@
 - name: Download vGPU VIB from S3 storage
-  command: "mc cp s3/{{ s3_bucket }}/{{ vib_filename }} ."
+  ansible.builtin.command: "mc cp s3/{{ s3_bucket }}/{{ vib_filename }} ."
   args:
     chdir: bootstrap
-  delegate_to: bastion
 
 - name: Copy script for installing vGPU on all remote ESXi hosts
-  template:
+  ansible.builtin.template:
     src: templates/install_vgpu.py.j2
     dest: bootstrap/install_vgpu.py
     mode: u=xwr,g=r,o=r
-  delegate_to: bastion
 
 - name: Copy script for locally installing VIB on an ESXi host
-  template:
+  ansible.builtin.template:
     src: templates/install_vib_esxi.sh.j2
     dest: bootstrap/install_vib_esxi.sh
     mode: u=xwr,g=r,o=r
-  delegate_to: bastion
 
 - name: Install vGPU host driver on all ESXi hosts
-  command: "python3 $HOME/bootstrap/install_vgpu.py"
+  ansible.builtin.command: "python3 $HOME/bootstrap/install_vgpu.py"
   args:
     chdir: bootstrap
-  delegate_to: bastion
 
 - name: Wait for vCenter to become available after reboot
-  uri:
+  ansible.builtin.uri:
     url: "https://{{ vcenter_ip }}/ui/"
     method: GET
     validate_certs: no

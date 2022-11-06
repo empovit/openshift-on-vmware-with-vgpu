@@ -1,21 +1,27 @@
 - name: Install Python dependencies
-  pip:
+  ansible.builtin.pip:
     name:
       - PyVmomi>=7.0.3
     state: present
 
+- name: Copy Host graphics script to the bastion
+  ansible.builtin.copy:
+    src: update_host_graphics.py
+    dest: bootstrap/update_host_graphics.py
+    mode: u=xwr,g=r,o=r
+
 - name: Change Host graphics to Shared Direct
-  command:
+  ansible.builtin.command:
     argv:
       - "python3"
-      - "{{ role_path }}/files/update_host_graphics.py"
+      - "$HOME/bootstrap/update_host_graphics.py"
       - "--host={{ vcenter_ip }}"
       - "--user={{ vcenter_username }}"
       - "--passwd={{ vcenter_password }}"
       - "--graphics=sharedDirect"
       - "--ignore-certs"
   args:
-    chdir: files
+    chdir: bootstrap
 
   # Simply restarting Xorg might not work, and reboot may be required
 - name: Restart X.Org Server service for host graphics to take effect

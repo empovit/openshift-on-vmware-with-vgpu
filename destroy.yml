@@ -3,14 +3,13 @@
   hosts: localhost
   gather_facts: no
 
-  vars:
-    temp_directory: "{{ playbook_dir }}/tmp"
-
   tasks:
 
     - include_role:
         name: vsphere
         tasks_from: destroy
+      vars:
+        temp_directory: "{{ local_temp_dir }}"
 
     - name: Delete the assisted cluster
       karmab.aicli.ai_cluster:
