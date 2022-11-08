@@ -9,7 +9,7 @@ First, review the generated _&lt;temp_directory&gt;/terraform.tfvars_ file, chan
 
 Full Terraform output is also dumped into _&lt;temp_directory&gt;/terraform.stdout.[.timestamp]_ and _&lt;temp_directory&gt;/terraform.stderr[.timestamp]_.
 
-If you are seeing a dependency incompatibility error similar to the one below, most likely upgrading the ESXi version has failed:
+If you are seeing a dependency incompatibility error similar to the one below, most likely upgrading the ESXi version has silently failed for some reason:
 
 ```
 [DependencyError]
