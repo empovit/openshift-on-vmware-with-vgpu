@@ -9,6 +9,20 @@ First, review the generated _&lt;temp_directory&gt;/terraform.tfvars_ file, chan
 
 Full Terraform output is also dumped into _&lt;temp_directory&gt;/terraform.stdout.[.timestamp]_ and _&lt;temp_directory&gt;/terraform.stderr[.timestamp]_.
 
+If you are seeing a dependency incompatibility error similar to the one below, most likely upgrading the ESXi version has failed:
+
+```
+[DependencyError]
+...
+VIB NVD-XXXXXXX requires vmkapi_2_2_0_0, but the requirement cannot be satisfied within the ImageProfile
+```
+
+Make sure that `update_esxi` is set to `true` in the generated Terraform variables file, then re-run Terraform. Verify that the ESXi version is `VMware ESXi 7.0.x build-xxxx` by running the following command on the ESXi host:
+
+```
+vmware -v
+```
+
 ### Other Components
 
 See [Connecting to setup](connecting.md) to learn how to connect to the bastion server, ESXi host, vCenter, and OpenShift console of a setup.
