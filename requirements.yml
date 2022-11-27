@@ -2,6 +2,7 @@
 roles:
   - name: empovit.gpu_operator
     src: https://github.com/empovit/ansible-gpu-operator
+    version: v1.0.0
 
 collections:
   - amazon.aws
@@ -10,4 +11,4 @@ collections:
   - karmab.aicli
   - name: https://github.com/empovit/ansible-assisted-openshift.git
     type: git
-    version: main
+    version: v1.0.0
