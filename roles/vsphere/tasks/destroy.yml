@@ -7,13 +7,13 @@
   register: terraform_out
 
 - name: Save Terraform stdout to a log file
-  copy:
+  ansible.builtin.copy:
     content: "{{ terraform_out.stdout }}"
     dest: "{{ temp_directory }}/terraform-destroy.stdout"
     backup: yes
 
 - name: Save Terraform stderr to a log file
-  copy:
+  ansible.builtin.copy:
     content: "{{ terraform_out.stderr }}"
     dest: "{{ temp_directory }}/terraform-destroy.stderr"
     backup: yes

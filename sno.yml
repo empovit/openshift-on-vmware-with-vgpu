@@ -13,14 +13,14 @@
   roles:
     - name: vsphere
       vars:
-        use_private_networks: "{{ use_private_networks }}"
+        private_networks: "{{ use_private_networks | default(false) | bool }}"
         temp_directory: "{{ local_temp_dir }}"
 
-- hosts: "{{ 'bastion' if use_private_networks | bool else 'localhost' }}"
+- hosts: "{{ 'bastion' if use_private_networks | default(false) | bool else 'localhost' }}"
   gather_facts: false
 
   vars:
-    private_networks: "{{ use_private_networks | bool }}"
+    private_networks: "{{ use_private_networks | default(false) | bool }}"
     remote_temp_dir: "{{ '/root/openshift-cluster' if private_networks else local_temp_dir }}"
     vgpu_profile: "grid_v100dx-32c" # Must be a CUDA-supported vGPU type
     oc_client_binary: https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz
