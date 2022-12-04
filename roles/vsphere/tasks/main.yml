@@ -8,7 +8,7 @@
 
 - name: Generate Terraform variables
   ansible.builtin.template:
-    src: "templates/{{ 'terraform.tfvars.private-net.j2' if use_private_networks | bool else 'terraform.tfvars.public-net.j2' }}"
+    src: "templates/{{ 'terraform.tfvars.private-net.j2' if private_networks | bool else 'terraform.tfvars.public-net.j2' }}"
     dest: "{{ temp_directory }}/terraform.tfvars"
 
 - name: Install vSphere on Equinix Metal using Terraform
