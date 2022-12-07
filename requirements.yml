@@ -2,7 +2,7 @@
 roles:
   - name: empovit.gpu_operator
     src: https://github.com/empovit/ansible-gpu-operator
-    version: v1.0.0
+    version: v1.1.0
 
 collections:
   - amazon.aws
